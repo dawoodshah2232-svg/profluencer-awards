@@ -1,0 +1,238 @@
+# ------------------------------------------------------------------
+# ProFluencer Awards — deploy to cPanel on every push to main.
+#
+#   1. Test the Laravel API on PHP 8.1 (deploy stops if tests fail)
+#   2. Build backend vendor/ (no dev packages) and the React frontend
+#   3. Over SSH: maintenance mode → rsync code → render .env →
+#      migrate + seed → cache → back online → health check
+#
+# Server layout (one domain, API under /api):
+#   CPANEL_PATH                      React build + laravel.php + .htaccess
+#   ~/profluencerawards-backend      Laravel app (OUTSIDE public_html;
+#                                    override with CPANEL_APP_PATH)
+#
+# Required secrets: CPANEL_HOST, CPANEL_PORT, CPANEL_USER, CPANEL_SSH_KEY,
+#   CPANEL_PATH, CPANEL_DB_PASSWORD, ADMIN_PASSWORD, DEMO_USER_PASSWORD
+# Optional secrets: CPANEL_SSH_PASSPHRASE, CPANEL_PHP, CPANEL_APP_PATH,
+#   MAIL_PASSWORD
+# See deploy/README.md.
+# ------------------------------------------------------------------
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys at once; a newer push waits for the running one.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SITE_URL: https://profluencerawards.com
+  PHP_VERSION: '8.1'
+  NODE_VERSION: '22'
+
+jobs:
+  deploy:
+    name: Test, build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------------- Backend: test + build ----------------------
+      - name: Set up PHP ${{ env.PHP_VERSION }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, pdo_mysql, pdo_sqlite, bcmath, intl, fileinfo, curl, zip
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install backend dependencies (with dev, for tests)
+        working-directory: backend
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Run backend tests
+        working-directory: backend
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan test
+          rm -f .env
+
+      - name: Build production vendor (no dev packages)
+        working-directory: backend
+        run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress --prefer-dist
+
+      # ---------------- Frontend: build -----------------------------
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          # Same domain as the site, so a relative URL works for both
+          # profluencerawards.com and www. Demo mode is never enabled.
+          VITE_API_URL: /api/v1
+        run: |
+          npm ci
+          npm run build
+          test -f dist/index.html
+
+      # ---------------- SSH -----------------------------------------
+      - name: Configure SSH
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_PORT: ${{ secrets.CPANEL_PORT }}
+          CPANEL_USER: ${{ secrets.CPANEL_USER }}
+          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          CPANEL_SSH_PASSPHRASE: ${{ secrets.CPANEL_SSH_PASSPHRASE }}
+        run: |
+          for v in CPANEL_HOST CPANEL_USER CPANEL_SSH_KEY; do
+            if [ -z "${!v}" ]; then echo "::error::Secret $v is not set"; exit 1; fi
+          done
+          PORT="${CPANEL_PORT:-22}"
+
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_KEY" | tr -d '\r' > ~/.ssh/cpanel_key
+          chmod 600 ~/.ssh/cpanel_key
+          # cPanel-generated keys usually have a passphrase: strip it from
+          # this throwaway copy so the non-interactive runner can use it.
+          if [ -n "$CPANEL_SSH_PASSPHRASE" ]; then
+            ssh-keygen -p -P "$CPANEL_SSH_PASSPHRASE" -N "" -f ~/.ssh/cpanel_key >/dev/null
+          fi
+
+          ssh-keyscan -p "$PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          if [ ! -s ~/.ssh/known_hosts ]; then echo "::error::Could not reach $CPANEL_HOST:$PORT over SSH"; exit 1; fi
+
+          cat > ~/.ssh/config <<EOF
+          Host cpanel
+            HostName $CPANEL_HOST
+            Port $PORT
+            User $CPANEL_USER
+            IdentityFile ~/.ssh/cpanel_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          EOF
+          chmod 600 ~/.ssh/config
+          ssh cpanel 'echo "SSH OK: $(whoami)@$(hostname)"'
+
+      - name: Resolve server paths
+        env:
+          CPANEL_PATH: ${{ secrets.CPANEL_PATH }}
+          CPANEL_APP_PATH: ${{ secrets.CPANEL_APP_PATH }}
+        run: |
+          if [ -z "$CPANEL_PATH" ]; then echo "::error::Secret CPANEL_PATH is not set"; exit 1; fi
+          REMOTE_HOME="$(ssh cpanel 'printf %s "$HOME"')"
+          abs() {
+            case "$1" in
+              /*) printf '%s' "${1%/}" ;;
+              "~"/*) printf '%s' "$REMOTE_HOME/${1#\~/}" ;;
+              *) printf '%s' "$REMOTE_HOME/${1%/}" ;;
+            esac
+          }
+          WEB_DIR="$(abs "$CPANEL_PATH")"
+          APP_DIR="$(abs "${CPANEL_APP_PATH:-profluencerawards-backend}")"
+          case "$APP_DIR/" in
+            "$WEB_DIR"/*) echo "::error::CPANEL_APP_PATH must be outside the web root ($WEB_DIR)"; exit 1 ;;
+          esac
+          echo "WEB_DIR=$WEB_DIR" >> "$GITHUB_ENV"
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+          echo "Web root: $WEB_DIR"
+          echo "Laravel:  $APP_DIR"
+
+      - name: Render production .env
+        env:
+          DB_PASSWORD: ${{ secrets.CPANEL_DB_PASSWORD }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          DEMO_USER_PASSWORD: ${{ secrets.DEMO_USER_PASSWORD }}
+        run: |
+          # Keep the server's APP_KEY (changing it would log everyone out
+          # and break encrypted data); generate one only on first deploy.
+          RAW="$(ssh cpanel "grep -m1 '^APP_KEY=' $(printf %q "$APP_DIR/.env") 2>/dev/null" || true)"
+          APP_KEY="${RAW#APP_KEY=}"
+          APP_KEY="$(printf '%s' "$APP_KEY" | tr -d "\"' \r")"
+          if [ -n "$APP_KEY" ]; then echo "::add-mask::$APP_KEY"; fi
+          if [ -z "$APP_KEY" ]; then
+            APP_KEY="base64:$(php -r 'echo base64_encode(random_bytes(32));')"
+            echo "First deploy: generated a new APP_KEY"
+          fi
+          echo "::add-mask::$APP_KEY"
+          export APP_KEY
+          php deploy/render-env.php deploy/env.production "$RUNNER_TEMP/backend.env"
+
+      - name: "Server: preflight + maintenance mode"
+        env:
+          CPANEL_PHP: ${{ secrets.CPANEL_PHP }}
+        run: |
+          ssh cpanel "APP_DIR=$(printf %q "$APP_DIR") WEB_DIR=$(printf %q "$WEB_DIR") PHP_BIN=$(printf %q "$CPANEL_PHP") bash -s pre" < deploy/remote-deploy.sh
+
+      - name: Upload backend
+        run: |
+          rsync -az --delete \
+            --exclude='/.env' --exclude='/.env.*' \
+            --exclude='/storage/' --exclude='/.deploy/' \
+            --exclude='/tests/' --exclude='/phpunit.xml' --exclude='/.phpunit*' \
+            --exclude='/profluencer_verify' --exclude='/node_modules/' \
+            --exclude='.git*' \
+            backend/ "cpanel:$APP_DIR/"
+          rsync -az --delete deploy/ "cpanel:$APP_DIR/.deploy/"
+          rsync -z --chmod=F600 "$RUNNER_TEMP/backend.env" "cpanel:$APP_DIR/.env"
+          rm -f "$RUNNER_TEMP/backend.env"
+
+      - name: Upload frontend
+        run: |
+          # Top-level files are added/updated but never deleted, so nothing
+          # else in the web root (.well-known, cgi-bin, .htaccess rules
+          # cPanel added, laravel.php) is touched. Only the hashed assets
+          # folder is mirrored exactly.
+          rsync -az --exclude='/assets/' frontend/dist/ "cpanel:$WEB_DIR/"
+          rsync -az --delete frontend/dist/assets/ "cpanel:$WEB_DIR/assets/"
+
+      - name: "Server: migrate, seed, cache, go live"
+        env:
+          CPANEL_PHP: ${{ secrets.CPANEL_PHP }}
+        run: |
+          ssh cpanel "APP_DIR=$(printf %q "$APP_DIR") WEB_DIR=$(printf %q "$WEB_DIR") PHP_BIN=$(printf %q "$CPANEL_PHP") bash -s post" < deploy/remote-deploy.sh
+
+      - name: "Server: bring API back online after a failed deploy"
+        if: failure() && env.APP_DIR != ''
+        env:
+          CPANEL_PHP: ${{ secrets.CPANEL_PHP }}
+        run: |
+          ssh cpanel "APP_DIR=$(printf %q "$APP_DIR") WEB_DIR=$(printf %q "$WEB_DIR") PHP_BIN=$(printf %q "$CPANEL_PHP") bash -s up" < deploy/remote-deploy.sh || true
+
+      - name: Health check
+        run: |
+          # -k: a missing/expired SSL cert should not hide whether the app works.
+          for i in 1 2 3 4 5; do
+            if curl -fsSk --max-time 15 "$SITE_URL/api/v1/health" | tee /dev/stderr | grep -q '"ok":true'; then
+              echo; echo "API is live: $SITE_URL/api/v1/health"
+              curl -fsSk -o /dev/null --max-time 15 "$SITE_URL/" && echo "Frontend is live: $SITE_URL/"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Health check failed: $SITE_URL/api/v1/health"
+          exit 1

@@ -1,0 +1,16 @@
+# BEGIN ProFluencer Awards (managed by GitHub Actions deploy — do not edit inside this block)
+DirectoryIndex index.html
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Pass the Bearer token through to PHP (Sanctum auth).
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # /api and /api/... -> Laravel. Everything else is the static React
+    # build (hash routing, so no SPA fallback rewrite is needed).
+    RewriteRule ^api(/.*)?$ laravel.php [L,QSA]
+</IfModule>
+# END ProFluencer Awards

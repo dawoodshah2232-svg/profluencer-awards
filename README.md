@@ -43,6 +43,11 @@ substitute for real API data.
 
 ## cPanel deployment
 
+> **Automated:** every push to `main` deploys frontend + backend + database
+> migrations to cPanel via GitHub Actions. See **[deploy/README.md](deploy/README.md)**
+> for the secrets and one-time server setup. The manual steps below are only
+> for a host without SSH.
+
 **1. Database** — cPanel → MySQL Database Wizard: create database + user,
 grant ALL PRIVILEGES. Then phpMyAdmin → Import `database/schema.sql`,
 then `database/seeds.sql` (idempotent; safe to re-run).
