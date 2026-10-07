@@ -14,9 +14,10 @@ and puts the frontend, backend and database changes live on
    - checks the server's PHP version and extensions, then puts the API in
      maintenance mode. The API answers 503 for a few seconds; the website
      stays up.
-   - rsyncs the Laravel app to `~/profluencerawards-backend`, which is
-     **outside** `public_html`, so `.env`, `vendor` and logs can't be reached
-     from the web.
+   - rsyncs the Laravel app to `backend/` inside the domain folder. It is
+     blocked from the web twice: `backend/.htaccess` (`Require all denied`)
+     and a `^backend` 403 rule in the root `.htaccess`. After every deploy
+     the health check confirms `backend/.env` is **not** downloadable.
    - writes `.env` from [`env.production`](env.production), filling in the
      GitHub secrets. `APP_KEY` is kept from the server.
    - copies the React build into the web root and writes `laravel.php` (the
@@ -33,13 +34,14 @@ back online automatically.
 ### Server layout
 
 ```
-~/profluencerawards-backend/          Laravel app (CPANEL_APP_PATH to override)
-    .env                              written by the workflow (chmod 600)
-    storage/                          logs, cache: kept between deploys
 ~/public_html/profluencerawards.com/  web root (CPANEL_PATH)
-    index.html, assets/, images/      React build
+    index.html, assets/, img/         React build
     laravel.php                       API entry point → /api/*
     .htaccess                         our block + anything cPanel added
+    backend/                          Laravel app (403 from the web)
+        .htaccess                     Require all denied
+        .env                          written by the workflow (chmod 600)
+        storage/                      logs, cache: kept between deploys
 ```
 
 ### Database changes
@@ -71,7 +73,7 @@ Add these under **Settings → Secrets and variables → Actions → New reposit
 | `DEMO_USER_PASSWORD` | yes | Demo influencer login password (created once) |
 | `MAIL_PASSWORD` | recommended | Password of `noreply@profluencerawards.com`. If empty, mail goes through the server's `sendmail` |
 | `CPANEL_PHP` | optional | PHP CLI path if auto-detect fails, e.g. `/opt/cpanel/ea-php81/root/usr/bin/php` |
-| `CPANEL_APP_PATH` | optional | Laravel folder (default `~/profluencerawards-backend`; must be outside the web root) |
+| `CPANEL_APP_PATH` | optional | Laravel folder (default `<CPANEL_PATH>/backend`) |
 
 Non-secret production settings (`APP_URL`, DB name/user, mail host, …) are in
 [`env.production`](env.production). Edit that file and push to change them.
@@ -89,7 +91,7 @@ Non-secret production settings (`APP_URL`, DB name/user, mail host, …) are in
 4. **Cron** (cPanel → *Cron Jobs*, every minute). The OTP emails are queued
    and are only sent when this runs:
    ```
-   cd ~/profluencerawards-backend && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1; cd ~/profluencerawards-backend && /usr/local/bin/php artisan queue:work --stop-when-empty --max-time=50 >> /dev/null 2>&1
+   cd ~/public_html/profluencerawards.com/backend && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1; cd ~/public_html/profluencerawards.com/backend && /usr/local/bin/php artisan queue:work --stop-when-empty --max-time=50 >> /dev/null 2>&1
    ```
 5. **SSL**: cPanel → *SSL/TLS Status* → *Run AutoSSL*.
 
@@ -102,5 +104,6 @@ Non-secret production settings (`APP_URL`, DB name/user, mail host, …) are in
 | `no PHP 8.1–8.3 CLI found` | Set `CPANEL_PHP` (`ls /opt/alt/ \| grep php` or `ls /opt/cpanel/ \| grep php` in Terminal). |
 | `rsync is not installed` | Ask the host to enable rsync for SSH users. |
 | `Access denied for user` in migrate | Wrong `CPANEL_DB_PASSWORD`, or the user isn't added to the database with ALL PRIVILEGES. |
-| Health check fails but the steps passed | DNS/SSL not ready yet. Open the site; check `~/profluencerawards-backend/storage/logs/laravel.log`. |
+| Health check fails but the steps passed | DNS/SSL not ready yet. Open the site; check `backend/storage/logs/laravel.log`. |
+| `SECURITY: … is publicly readable` | `backend/.htaccess` is missing or the server ignores it. Restore it and ask the host to allow `.htaccess` overrides. |
 | OTP email never arrives | Cron job missing, or `MAIL_PASSWORD` wrong. Check `laravel.log` and the `failed_jobs` table. |

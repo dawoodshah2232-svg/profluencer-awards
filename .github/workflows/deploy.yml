@@ -8,7 +8,8 @@
 #
 # Server layout (one domain, API under /api):
 #   CPANEL_PATH                      React build + laravel.php + .htaccess
-#   ~/profluencerawards-backend      Laravel app (OUTSIDE public_html;
+#   CPANEL_PATH/backend              Laravel app (blocked from the web by
+#                                    backend/.htaccess + the root .htaccess;
 #                                    override with CPANEL_APP_PATH)
 #
 # Required secrets: CPANEL_HOST, CPANEL_PORT, CPANEL_USER, CPANEL_SSH_KEY,
@@ -152,10 +153,11 @@ jobs:
             esac
           }
           WEB_DIR="$(abs "$CPANEL_PATH")"
-          APP_DIR="$(abs "${CPANEL_APP_PATH:-profluencerawards-backend}")"
-          case "$APP_DIR/" in
-            "$WEB_DIR"/*) echo "::error::CPANEL_APP_PATH must be outside the web root ($WEB_DIR)"; exit 1 ;;
-          esac
+          APP_DIR="$(abs "${CPANEL_APP_PATH:-$WEB_DIR/backend}")"
+          if [ "$APP_DIR" = "$WEB_DIR" ]; then echo "::error::CPANEL_APP_PATH must not be the web root itself"; exit 1; fi
+          # Where the first deploys put Laravel (outside public_html); used
+          # only to carry its APP_KEY over to the new location.
+          echo "LEGACY_APP_DIR=$REMOTE_HOME/profluencerawards-backend" >> "$GITHUB_ENV"
           echo "WEB_DIR=$WEB_DIR" >> "$GITHUB_ENV"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
           echo "Web root: $WEB_DIR"
@@ -170,7 +172,7 @@ jobs:
         run: |
           # Keep the server's APP_KEY (changing it would log everyone out
           # and break encrypted data); generate one only on first deploy.
-          RAW="$(ssh cpanel "grep -m1 '^APP_KEY=' $(printf %q "$APP_DIR/.env") 2>/dev/null" || true)"
+          RAW="$(ssh cpanel "grep -m1 '^APP_KEY=' $(printf %q "$APP_DIR/.env") 2>/dev/null || grep -m1 '^APP_KEY=' $(printf %q "$LEGACY_APP_DIR/.env") 2>/dev/null" || true)"
           APP_KEY="${RAW#APP_KEY=}"
           APP_KEY="$(printf '%s' "$APP_KEY" | tr -d "\"' \r")"
           if [ -n "$APP_KEY" ]; then echo "::add-mask::$APP_KEY"; fi
@@ -230,6 +232,20 @@ jobs:
             if curl -fsSk --max-time 15 "$SITE_URL/api/v1/health" | tee /dev/stderr | grep -q '"ok":true'; then
               echo; echo "API is live: $SITE_URL/api/v1/health"
               curl -fsSk -o /dev/null --max-time 15 "$SITE_URL/" && echo "Frontend is live: $SITE_URL/"
+
+              # The Laravel folder is inside the web root: its secrets must
+              # never be downloadable. Fail loudly if the deny rules broke.
+              APP_URL_PATH="${APP_DIR#"$WEB_DIR"}"
+              if [ "$APP_URL_PATH" != "$APP_DIR" ]; then
+                for f in .env composer.json storage/logs/laravel.log artisan; do
+                  code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 15 "$SITE_URL$APP_URL_PATH/$f")"
+                  if [ "$code" = "200" ]; then
+                    echo "::error::SECURITY: $SITE_URL$APP_URL_PATH/$f is publicly readable (HTTP 200). Check backend/.htaccess on the server NOW."
+                    exit 1
+                  fi
+                  echo "Blocked as expected ($code): $APP_URL_PATH/$f"
+                done
+              fi
               exit 0
             fi
             sleep 5

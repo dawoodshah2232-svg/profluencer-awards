@@ -121,6 +121,17 @@ post)
     artisan view:cache
     artisan queue:restart
     artisan up
+
+    # One-time cleanup: the first deploys put Laravel outside public_html
+    # (~/profluencerawards-backend). Now that it lives in APP_DIR and this
+    # deploy succeeded, remove that old copy. Only that exact folder, and
+    # only if it really is a Laravel app.
+    LEGACY="$HOME/profluencerawards-backend"
+    if [ "$LEGACY" != "$APP_DIR" ] && [ -d "$LEGACY" ] && [ -f "$LEGACY/artisan" ]; then
+        rm -rf -- "$LEGACY"
+        echo "Removed old backend copy: $LEGACY"
+    fi
+
     echo "Deploy finished: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
     ;;
 

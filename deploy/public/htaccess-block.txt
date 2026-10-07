@@ -9,8 +9,20 @@ Options -Indexes
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+    # The Laravel app folder (backend/) is never web-reachable — second
+    # layer on top of backend/.htaccess (Require all denied).
+    RewriteRule ^backend(/|$) - [F,L]
+
     # /api and /api/... -> Laravel. Everything else is the static React
-    # build (hash routing, so no SPA fallback rewrite is needed).
+    # build.
     RewriteRule ^api(/.*)?$ laravel.php [L,QSA]
+
+    # The React app uses hash routing (/#/admin). Redirect clean URLs that
+    # people type or share (/admin, /login, /nominee/5) to their hash
+    # route. Real files/folders and anything with a dot (assets, images,
+    # .well-known files) are never redirected.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^([^.]+?)/?$ /#/$1 [R=302,NE,L]
 </IfModule>
 # END ProFluencer Awards

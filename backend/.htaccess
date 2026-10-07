@@ -1,0 +1,17 @@
+# ProFluencer Awards — the Laravel app lives inside the web root on cPanel
+# (public_html/profluencerawards.com/backend). Nothing in this folder may
+# ever be served directly: it holds .env (DB password, APP_KEY), vendor,
+# storage/logs. All API traffic goes through ../laravel.php instead.
+
+# Apache 2.4 / LiteSpeed
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
+
+Options -Indexes
