@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\RsvpResource;
 use App\Models\Rsvp;
+use App\Rules\NoLineBreaks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,7 +17,7 @@ class RsvpController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:150'],
-            'email' => ['required', 'email:rfc', 'max:190'],
+            'email' => ['required', new NoLineBreaks, 'email:rfc', 'max:190'],
             'mobile' => ['nullable', 'string', 'max:40'],
             'guest_type' => ['nullable', 'string', 'in:guest,vip,media,winner,honouree,team,nominee,sponsor,brand'],
             'guests_count' => ['nullable', 'integer', 'min:1', 'max:10'],

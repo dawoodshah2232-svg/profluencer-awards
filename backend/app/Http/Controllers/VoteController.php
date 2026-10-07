@@ -8,6 +8,7 @@ use App\Models\Nominee;
 use App\Models\Setting;
 use App\Models\Vote;
 use App\Models\Voter;
+use App\Rules\NoLineBreaks;
 use App\Services\AuditLogger;
 use App\Services\OtpService;
 use App\Services\PhoneNormalizer;
@@ -36,7 +37,7 @@ class VoteController extends Controller
         $validated = $request->validate([
             'nominee_id' => ['required', 'integer', 'exists:nominees,id'],
             'name' => ['required', 'string', 'min:2', 'max:100'],
-            'email' => ['required', 'email:rfc', 'max:190'],
+            'email' => ['required', new NoLineBreaks, 'email:rfc', 'max:190'],
             'phone' => ['required', 'string', 'min:7', 'max:25'],
         ]);
 

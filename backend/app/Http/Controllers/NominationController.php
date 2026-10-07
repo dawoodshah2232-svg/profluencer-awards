@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\NominationResource;
 use App\Models\Nomination;
+use App\Rules\NoLineBreaks;
 use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ class NominationController extends Controller
             'platform' => ['nullable', 'string', 'max:50'],
             'reason' => ['nullable', 'string', 'max:2000'],
             'submitter_name' => ['required', 'string', 'min:2', 'max:150'],
-            'submitter_email' => ['required', 'email:rfc', 'max:190'],
+            'submitter_email' => ['required', new NoLineBreaks, 'email:rfc', 'max:190'],
         ]);
 
         $nomination = Nomination::create($validated);

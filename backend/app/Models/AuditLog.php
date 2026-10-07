@@ -2,27 +2,29 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
-#[Fillable(['actor_type', 'actor_id', 'action', 'subject_type', 'subject_id', 'meta'])]
 class AuditLog extends Model
 {
     /** Append-only: no updated_at column exists. */
     public const UPDATED_AT = null;
 
     /**
-     * Get the attributes that should be cast.
+     * The attributes that are mass assignable.
      *
-     * @return array<string, string>
+     * @var array<int, string>
      */
-    protected function casts(): array
-    {
-        return [
-            'meta' => 'array',
-        ];
-    }
+    protected $fillable = ['actor_type', 'actor_id', 'action', 'subject_type', 'subject_id', 'meta'];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'meta' => 'array',
+    ];
 
     protected static function booted(): void
     {

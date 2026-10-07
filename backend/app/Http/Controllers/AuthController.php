@@ -6,6 +6,7 @@ use App\Http\Resources\UserResource;
 use App\Models\InfluencerAccount;
 use App\Models\Nominee;
 use App\Models\User;
+use App\Rules\NoLineBreaks;
 use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'email' => ['required', 'email', 'max:255'],
+            'email' => ['required', new NoLineBreaks, 'email', 'max:255'],
             'password' => ['required', 'string'],
         ]);
 
@@ -67,7 +68,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:150'],
             'display_name' => ['required', 'string', 'min:2', 'max:150'],
-            'email' => ['required', 'email:rfc', 'max:190', 'unique:users,email'],
+            'email' => ['required', new NoLineBreaks, 'email:rfc', 'max:190', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'max:72'],
             'mobile' => ['nullable', 'string', 'max:40'],
             'country' => ['nullable', 'string', 'max:80'],

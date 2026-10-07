@@ -3,24 +3,26 @@
 namespace App\Models;
 
 use App\Services\PhoneNormalizer;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'email', 'phone_normalized', 'phone_display', 'verified_at'])]
 class Voter extends Model
 {
     /**
-     * Get the attributes that should be cast.
+     * The attributes that are mass assignable.
      *
-     * @return array<string, string>
+     * @var array<int, string>
      */
-    protected function casts(): array
-    {
-        return [
-            'verified_at' => 'datetime',
-        ];
-    }
+    protected $fillable = ['name', 'email', 'phone_normalized', 'phone_display', 'verified_at'];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'verified_at' => 'datetime',
+    ];
 
     public function votes(): HasMany
     {

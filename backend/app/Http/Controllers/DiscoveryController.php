@@ -9,6 +9,7 @@ use App\Models\ResultSnapshot;
 use App\Models\Setting;
 use App\Models\Vote;
 use App\Models\Voter;
+use App\Rules\NoLineBreaks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -246,7 +247,7 @@ class DiscoveryController extends Controller
     {
         $validated = $request->validate([
             'category' => ['required', 'integer', 'exists:categories,id'],
-            'email' => ['required', 'email', 'max:190'],
+            'email' => ['required', new NoLineBreaks, 'email', 'max:190'],
             'phone' => ['required', 'string', 'max:25'],
         ]);
 

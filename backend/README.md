@@ -1,13 +1,14 @@
 # ProFluencer Awards — API Backend
 
-Laravel API backend for **profluencerawards.com** (ProFluencer Awards 2026).
+Laravel 10 API backend for **profluencerawards.com** (ProFluencer Awards 2026).
 Serves the React frontend at `/api/v1`. MySQL database. Built for cPanel
 shared hosting: plain PHP, no Octane, no Horizon — the queue runs on the
 `database` driver.
 
 ## Requirements
 
-- PHP 8.3+ with extensions: mbstring, xml, curl, mysqlnd/pdo_mysql, zip, bcmath
+- PHP 8.1+ (8.1 / 8.2 / 8.3) with extensions: mbstring, xml, curl, mysqlnd/pdo_mysql, zip, bcmath, fileinfo, openssl
+- Laravel 10.x (end-of-life — see the version note in `BACKEND_NOTES.md`)
 - Composer 2
 - MySQL 8 / MariaDB 10.4+
 
@@ -101,7 +102,7 @@ in `BACKEND_NOTES.md`.
    * * * * * /usr/local/bin/php /home/<user>/profluencerawards-api/artisan schedule:run >> /dev/null 2>&1
    ```
    Use the PHP binary from cPanel → MultiPHP Manager (`/usr/local/bin/php`
-   or `/opt/cpanel/ea-php83/root/usr/bin/php`).
+   or `/opt/cpanel/ea-php81/root/usr/bin/php`).
 
 6. **Storage permissions**:
    ```bash

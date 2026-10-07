@@ -2,16 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
-#[Fillable([
-    'voter_id', 'nominee_id', 'category_id', 'status',
-    'otp_hash', 'otp_expires_at', 'otp_attempts',
-    'invalidated_reason', 'ip_hash', 'user_agent', 'idempotency_key',
-])]
 class Vote extends Model
 {
     public const STATUS_HELD = 'held';
@@ -21,16 +15,24 @@ class Vote extends Model
     public const STATUS_INVALIDATED = 'invalidated';
 
     /**
-     * Get the attributes that should be cast.
+     * The attributes that are mass assignable.
      *
-     * @return array<string, string>
+     * @var array<int, string>
      */
-    protected function casts(): array
-    {
-        return [
-            'otp_expires_at' => 'datetime',
-        ];
-    }
+    protected $fillable = [
+        'voter_id', 'nominee_id', 'category_id', 'status',
+        'otp_hash', 'otp_expires_at', 'otp_attempts',
+        'invalidated_reason', 'ip_hash', 'user_agent', 'idempotency_key',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'otp_expires_at' => 'datetime',
+    ];
 
     protected static function booted(): void
     {

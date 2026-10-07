@@ -5,20 +5,36 @@ verified 2026-10-06 (see Verification at the bottom).
 
 ## Stack
 
-- **Laravel 13.x** (latest stable) on **PHP 8.3**, API-only, MySQL/MariaDB.
-- Auth: **Laravel Sanctum** personal access tokens (Bearer).
+- **Laravel 10.x** (10.50.x, final 10.x line) on **PHP 8.1+**, API-only, MySQL/MariaDB.
+  Composer is pinned to `config.platform.php = 8.1.0`, so `composer update`
+  only ever resolves packages that run on PHP 8.1 hosting.
+- Auth: **Laravel Sanctum 3** personal access tokens (Bearer).
 - Queue: **database** driver (cPanel-compatible; cron runs
   `queue:work --stop-when-empty`). No Octane / Horizon.
 - Timezone: `Asia/Dubai` (`APP_TIMEZONE`).
 
-> **Version note:** the task asked for Laravel 11, but Composer refuses to
-> install it — every Laravel 11.x release is blocked by published security
-> advisories (PKSA-d5tc-s1qs-h781, PKSA-m5cs-t1y6-qpcs, PKSA-3r5d-mb8f-1qw9,
-> PKSA-3r5d-mb8f-1qw9, PKSA-51ck-6kdq, PKSA-vvnd, PKSA-4fdk-zjr4, PKSA-qzrn-rnz3).
-> Installing a version with known CVEs for a production voting system would be
-> irresponsible, so the latest stable (13.x) was used instead. All code uses
-> APIs that are stable since Laravel 11 (Eloquent, Sanctum, resources,
-> rate limiters, `bootstrap/app.php` style config).
+> **Version note (2026-10-07):** downgraded from Laravel 13 / PHP 8.3 to
+> Laravel 10 / PHP 8.1 on request, to match the target hosting. Laravel 10 is
+> **end-of-life** (security fixes ended Feb 2025). Three published advisories
+> have no 10.x fix and are explicitly ignored in `composer.json`
+> (`config.policy.advisories.ignore-id`), each with a mitigation:
+>
+> | Advisory | Severity | Why it is acceptable here |
+> |---|---|---|
+> | GHSA-5vg9-5847-vvmq — CRLF injection in `email` rule | high | Every email field also runs `App\Rules\NoLineBreaks`, which rejects CR/LF and control characters before the `email` rule. **Any new email field must add it.** |
+> | GHSA-crmm-hgp2-wgrp — temporary signed URL path confusion | medium | The app uses no signed URLs. Do not add any without upgrading. |
+> | GHSA-jh5r-qr3c-85q8 — XSS on debug error page | low | Only reachable with `APP_DEBUG=true`; production must keep `APP_DEBUG=false`. |
+>
+> Upgrade to a supported Laravel release (12/13, PHP 8.2+/8.3+) as soon as
+> the hosting allows.
+>
+> Laravel 10 structure: middleware aliases live in `app/Http/Kernel.php`
+> (`role` → `RoleMiddleware`), JSON error rendering for `/api/*` in
+> `app/Exceptions/Handler.php`, rate limiters in `AppServiceProvider`.
+> `Sanctum::ignoreMigrations()` is set because `personal_access_tokens` is
+> created by our own migration. The default 60/min `throttle:api` group limit
+> was removed from the `api` middleware group; the per-route limiters
+> (`votes`, `otp`, `nominations`, `login`) apply as before.
 
 ## Endpoint table (`/api/v1`)
 

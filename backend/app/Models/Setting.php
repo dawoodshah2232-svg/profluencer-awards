@@ -3,13 +3,18 @@
 namespace App\Models;
 
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 
-#[Fillable(['key', 'value'])]
 class Setting extends Model
 {
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = ['key', 'value'];
+
     /**
      * Read a setting value with an optional default. Values are cached for
      * 60 seconds; writes bust the cache.
