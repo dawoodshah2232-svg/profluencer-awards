@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EnquiryResource;
 use App\Models\Enquiry;
+use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,7 +22,7 @@ class EnquiryAdminController extends Controller
             $query->whereNull('read_at');
         }
 
-        return EnquiryResource::collection($query->paginate(50))->response();
+        return EnquiryResource::collection($query->paginate(min(500, max(1, $request->integer('per_page', 50)))))->response();
     }
 
     public function markRead(Request $request, Enquiry $enquiry): JsonResponse
@@ -50,5 +51,13 @@ class EnquiryAdminController extends Controller
         }
 
         return response()->json(['data' => new EnquiryResource($enquiry)]);
+    }
+
+    public function destroy(Request $request, Enquiry $enquiry): JsonResponse
+    {
+        AuditLogger::log('admin', $request->user(), 'enquiry.deleted', $enquiry, ['email' => $enquiry->email]);
+        $enquiry->delete();
+
+        return response()->json(['message' => 'Enquiry deleted.']);
     }
 }

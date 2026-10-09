@@ -30,6 +30,6 @@ class AuditLogController extends Controller
             $query->where('subject_type', $request->string('subject_type'));
         }
 
-        return AuditLogResource::collection($query->paginate(50))->response();
+        return AuditLogResource::collection($query->paginate(min(500, max(1, $request->integer('per_page', 50)))))->response();
     }
 }

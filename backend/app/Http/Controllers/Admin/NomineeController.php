@@ -16,7 +16,7 @@ class NomineeController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Nominee::query()->with('category')->orderBy('category_id')->orderBy('name');
+        $query = Nominee::query()->with(['category', 'influencerAccount.user'])->orderBy('category_id')->orderBy('name');
 
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->integer('category_id'));
@@ -33,7 +33,7 @@ class NomineeController extends Controller
 
         $request->attributes->set('expose_votes', true);
 
-        return NomineeResource::collection($query->paginate(50))->response();
+        return NomineeResource::collection($query->paginate(min(500, max(1, $request->integer('per_page', 50)))))->response();
     }
 
     public function store(Request $request): JsonResponse
@@ -44,7 +44,11 @@ class NomineeController extends Controller
             'handle' => ['nullable', 'string', 'max:120'],
             'platform' => ['nullable', 'string', 'max:50'],
             'bio' => ['nullable', 'string', 'max:5000'],
-            'photo_url' => ['nullable', 'url', 'max:255'],
+            'photo_url' => ['nullable', 'string', 'max:255'],
+            'mobile' => ['nullable', 'string', 'max:40'],
+            'country' => ['nullable', 'string', 'max:80'],
+            'city' => ['nullable', 'string', 'max:80'],
+            'profile_url' => ['nullable', 'url', 'max:255'],
             'status' => ['nullable', 'string', 'in:pending,approved,rejected,changes_requested'],
         ]);
 
@@ -71,7 +75,11 @@ class NomineeController extends Controller
             'handle' => ['nullable', 'string', 'max:120'],
             'platform' => ['nullable', 'string', 'max:50'],
             'bio' => ['nullable', 'string', 'max:5000'],
-            'photo_url' => ['nullable', 'url', 'max:255'],
+            'photo_url' => ['nullable', 'string', 'max:255'],
+            'mobile' => ['nullable', 'string', 'max:40'],
+            'country' => ['nullable', 'string', 'max:80'],
+            'city' => ['nullable', 'string', 'max:80'],
+            'profile_url' => ['nullable', 'url', 'max:255'],
             'status' => ['sometimes', 'string', 'in:pending,approved,rejected,changes_requested'],
         ]);
 

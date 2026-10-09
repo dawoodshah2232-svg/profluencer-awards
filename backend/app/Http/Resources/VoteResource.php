@@ -14,6 +14,9 @@ class VoteResource extends JsonResource
         return [
             'id' => $this->id,
             'status' => $this->status,
+            'nominee_id' => $this->nominee_id,
+            'category_id' => $this->category_id,
+            'reason' => $this->invalidated_reason,
             'otp_expires_at' => $this->otp_expires_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
             'nominee' => new NomineeResource($this->whenLoaded('nominee')),

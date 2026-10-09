@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
+import { shortDate, shortDateYear, useDates } from '../lib/dates'
 
 const img = (p) => `${import.meta.env.BASE_URL}${p}`
 
@@ -79,13 +80,14 @@ function Header() {
 /* ---------- footer ---------- */
 function Footer() {
   const y = new Date().getFullYear()
+  const dates = useDates()
   return (
     <footer className="site-footer">
       <div className="container">
         <div className="foot-grid">
           <div>
             <Link className="brand" to="/" style={{ marginBottom: 14 }}>
-              <img src={img('img/logo-clean.png')} alt="ProFluencer Awards Dubai 2026 logo" style={{ height: 54 }} />
+              <img src={img('img/logo-clean.png')} alt="ProFluencer Awards Dubai 2026 logo" style={{ height: 78 }} />
             </Link>
             <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 300, marginTop: 12 }}>
               The region&rsquo;s most prestigious celebration of digital influence. 10 industries, 50 awards, decided by public vote.
@@ -116,7 +118,7 @@ function Footer() {
         </div>
         <div className="foot-bottom">
           <span>&copy; {y} ProFluencer Awards &middot; profluencerawards.com</span>
-          <span>Voting Oct 15 &ndash; Nov 30, 2026 &middot; Ceremony Dec 11</span>
+          <span>Voting {shortDate(dates.votingStart)} &ndash; {shortDateYear(dates.votingEnd)} &middot; Ceremony {shortDateYear(dates.ceremonyDate)}</span>
         </div>
       </div>
     </footer>
@@ -134,7 +136,7 @@ export default function Layout({ children, demoMode, offline }) {
     <>
       <a className="skip-link" href="#main">Skip to content</a>
       {demoMode && (
-        <div className="demo-banner" style={{ paddingTop: 78 }}>
+        <div className="demo-banner" style={{ paddingTop: 108 }}>
           Demo preview — sample nominees and votes shown are not real.
         </div>
       )}

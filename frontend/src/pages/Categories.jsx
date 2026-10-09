@@ -5,7 +5,7 @@ import { PageHero } from '../components/ui'
 import { useAsync } from '../lib/hooks'
 import { Store } from '../lib/store'
 
-const img = (p) => `${import.meta.env.BASE_URL}${p}`
+import { assetUrl } from '../lib/assets'
 
 export default function Categories() {
   const loc = useLocation()
@@ -41,7 +41,7 @@ export default function Categories() {
               <Link className="cat-card" to={`/nominees?cat=${c.id}`} style={{ display: 'grid', gridTemplateColumns: '1fr', marginBottom: 0 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 0, alignItems: 'stretch' }}>
                   <div style={{ minHeight: 130 }}>
-                    <img loading="lazy" src={img(c.img)} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img loading="lazy" src={assetUrl(c.img)} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                   <div style={{ padding: 20 }}>
                     <span className="top5-badge">5 Awards</span>

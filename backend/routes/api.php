@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\ContentController as AdminContentController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EnquiryAdminController;
 use App\Http\Controllers\Admin\NominationReviewController;
@@ -9,9 +11,11 @@ use App\Http\Controllers\Admin\NomineeController;
 use App\Http\Controllers\Admin\ResultController;
 use App\Http\Controllers\Admin\RsvpAdminController;
 use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VoteAdminController;
 use App\Http\Controllers\Admin\VoterController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ContentController;
 use App\Http\Controllers\DiscoveryController;
 use App\Http\Controllers\EnquiryController;
 use App\Http\Controllers\InfluencerController;
@@ -50,6 +54,9 @@ Route::prefix('v1')->group(function (): void {
     Route::get('/analytics/votes-per-day', [DiscoveryController::class, 'votesPerDay']);
     Route::get('/analytics/votes-by-category', [DiscoveryController::class, 'votesByCategory']);
     Route::get('/results', [DiscoveryController::class, 'results']);
+
+    Route::get('/content/news/{slug}', [ContentController::class, 'article']);
+    Route::get('/content/{type}', [ContentController::class, 'index']);
 
     Route::post('/votes', [VoteController::class, 'store'])->middleware('throttle:votes');
     Route::post('/votes/verify', [VoteController::class, 'verify'])->middleware('throttle:otp');
@@ -118,10 +125,31 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/rsvps', [RsvpAdminController::class, 'index']);
             Route::post('/rsvps/{rsvp}/check-in', [RsvpAdminController::class, 'checkIn']);
             Route::post('/rsvps/{rsvp}/checkin', [RsvpAdminController::class, 'checkIn']);
+            Route::delete('/rsvps/{rsvp}/checkin', [RsvpAdminController::class, 'undoCheckIn']);
+            Route::delete('/rsvps/{rsvp}', [RsvpAdminController::class, 'destroy']);
 
             Route::get('/enquiries', [EnquiryAdminController::class, 'index']);
             Route::post('/enquiries/{enquiry}/read', [EnquiryAdminController::class, 'markRead']);
             Route::patch('/enquiries/{enquiry}', [EnquiryAdminController::class, 'update']);
+            Route::delete('/enquiries/{enquiry}', [EnquiryAdminController::class, 'destroy']);
+
+            Route::get('/categories', [CategoryController::class, 'index']);
+            Route::post('/categories', [CategoryController::class, 'store']);
+            Route::patch('/categories/{category}', [CategoryController::class, 'update']);
+            Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
+
+            Route::get('/content', [AdminContentController::class, 'index']);
+            Route::post('/content', [AdminContentController::class, 'store']);
+            Route::patch('/content/{content}', [AdminContentController::class, 'update']);
+            Route::delete('/content/{content}', [AdminContentController::class, 'destroy']);
+
+            // Login accounts (staff + influencer clients): super_admin / admin only.
+            Route::middleware('role:super_admin,admin')->group(function (): void {
+                Route::get('/users', [UserController::class, 'index']);
+                Route::post('/users', [UserController::class, 'store']);
+                Route::patch('/users/{user}', [UserController::class, 'update']);
+                Route::delete('/users/{user}', [UserController::class, 'destroy']);
+            });
         });
     });
 });

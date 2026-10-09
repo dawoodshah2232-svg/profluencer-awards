@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom'
 import { PageHero } from '../components/ui'
-import { ARTICLES } from '../data/news'
-
-const img = (p) => `${import.meta.env.BASE_URL}${p}`
+import { useAsync } from '../lib/hooks'
+import { Store } from '../lib/store'
+import { assetUrl } from '../lib/assets'
 
 export default function News() {
+  const { data: articles = [], loading, error } = useAsync(() => Store.content('news'), [])
+
   return (
     <>
       <PageHero
@@ -14,12 +16,15 @@ export default function News() {
       />
       <section style={{ paddingTop: 0 }}>
         <div className="container">
+          {loading && <p className="hint">Loading articles…</p>}
+          {error && <p className="hint">Could not load articles right now. Please try again shortly.</p>}
+          {!loading && !error && !articles.length && <p className="hint">No articles published yet.</p>}
           <div className="news-grid">
-            {ARTICLES.map((a) => (
-              <Link className="news-card" key={a.slug} to={`/news/${a.slug}`}>
-                <div className="ph"><img loading="lazy" src={img(a.img)} alt={a.alt} /></div>
+            {articles.map((a) => (
+              <Link className="news-card" key={a.id} to={`/news/${a.slug}`}>
+                <div className="ph">{a.img && <img loading="lazy" src={assetUrl(a.img)} alt={a.alt} />}</div>
                 <div className="body">
-                  <span className="date">{a.date} &middot; {a.tag}</span>
+                  <span className="date">{[a.date, a.tag].filter(Boolean).join(' · ')}</span>
                   <h3>{a.title}</h3>
                   <p>{a.excerpt}</p>
                   <span className="read">Read the article &rarr;</span>

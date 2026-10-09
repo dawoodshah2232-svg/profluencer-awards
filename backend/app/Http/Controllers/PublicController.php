@@ -27,6 +27,7 @@ class PublicController extends Controller
                 'voting_end' => Setting::get('voting_end'),
                 'voting_open' => Setting::votingIsOpen(),
                 'ceremony_date' => Setting::get('ceremony_date'),
+                'ceremony_time' => Setting::get('ceremony_time'),
                 'ceremony_city' => Setting::get('ceremony_city'),
                 'ceremony_session' => Setting::get('ceremony_session'),
                 'ceremony_venue' => Setting::get('ceremony_venue'),

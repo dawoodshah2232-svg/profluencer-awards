@@ -31,6 +31,9 @@ class NomineeResource extends JsonResource
                 $this->votes_count
             ),
             'category' => new CategoryResource($this->whenLoaded('category')),
+            // Login email of the linked influencer account (admin listing only).
+            'email' => $this->whenLoaded('influencerAccount', fn () => $this->influencerAccount?->user?->email),
+            'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
 }

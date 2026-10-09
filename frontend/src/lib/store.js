@@ -17,6 +17,7 @@
    Pages call Store.* and never care which backend answered. */
 
 import { Demo, fmt, initials, fmtTime } from './demoData'
+import { demoContent } from '../data/content'
 import { API_BASE, ApiError, api, apiAvailable, tokens } from './api'
 
 /* Explicit opt-in only. Never default this to true. */
@@ -67,11 +68,63 @@ const oneOf = (r) => (r && r.data) || r
    tagline). Every API-mode response passes through these mappers so the
    pages never depend on transport details. */
 const demoCatByName = Object.fromEntries((Demo.CATEGORIES || []).map((c) => [c.name, c]))
-const normCategory = (c) => {
-  if (!c || c.img) return c
-  const d = demoCatByName[c.name] || {}
-  return { ...c, img: d.img || '', tagline: d.tagline || c.description || '', desc: c.description || d.desc || '' }
+/* Bundled artwork for the seeded category slugs; admin-set image_url wins. */
+const CAT_IMG_BY_SLUG = {
+  'fashion-and-beauty': 'img/cat-fashion.jpg', 'lifestyle-and-entertainment': 'img/cat-entertainment.jpg',
+  'travel-and-hospitality': 'img/cat-travel.jpg', 'food-and-dining': 'img/cat-food.jpg',
+  'health-fitness-and-wellness': 'img/cat-fitness.jpg', 'business-and-entrepreneurship': 'img/cat-business.jpg',
+  'finance-trading-and-crypto': 'img/cat-finance.jpg', 'technology-and-innovation': 'img/cat-tech.jpg',
+  'real-estate-and-home': 'img/cat-realestate.jpg', 'education-parenting-and-family': 'img/cat-education.jpg',
 }
+const normCategory = (c) => {
+  if (!c || c.img !== undefined) return c
+  const d = demoCatByName[c.name] || {}
+  return {
+    ...c,
+    img: c.image_url || CAT_IMG_BY_SLUG[c.slug] || d.img || 'img/trophy.jpg',
+    tagline: c.tagline || d.tagline || c.description || '',
+    desc: c.description || d.desc || '',
+  }
+}
+
+/* Admin list adapters: API rows -> the shapes the CRM renders. Demo rows
+   already carry these keys and pass through untouched. */
+const normRsvp = (r) => (r.at !== undefined ? r : {
+  ...r, type: r.guest_type || 'guest', guests: r.guests_count || 1,
+  checkedIn: !!r.checked_in_at, checkedInAt: r.checked_in_at, at: r.created_at,
+})
+const normEnquiry = (e) => (e.at !== undefined ? e : { ...e, read: !!e.read_at, at: e.created_at })
+const normVote = (v) => (v.at !== undefined ? v : {
+  ...v, at: v.created_at,
+  nomineeId: v.nominee_id ?? v.nominee?.id, nomineeName: v.nominee?.name,
+  categoryId: v.category_id ?? v.category?.id, categoryName: v.category?.name,
+  voterId: v.voter?.id, voterName: v.voter?.name, voterEmail: v.voter?.email,
+})
+const auditDetail = (meta) => {
+  if (!meta || typeof meta !== 'object') return ''
+  return Object.entries(meta)
+    .filter(([, v]) => v !== null && v !== '' && typeof v !== 'object')
+    .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · ')
+}
+const normAudit = (a) => (a.at !== undefined ? a : {
+  ...a, at: a.created_at,
+  actor: a.actor_name || (a.actor_id ? `${a.actor_type} #${a.actor_id}` : a.actor_type),
+  detail: [a.subject_type ? `${String(a.subject_type).split('\\').pop()} #${a.subject_id ?? ''}` : '', auditDetail(a.meta)].filter(Boolean).join(' · '),
+})
+/* Website content row (news / sponsor_tier / faq). News rows also get the
+   article shape the public pages use. */
+const normContent = (c) => ({
+  ...c,
+  meta: c.meta || {},
+  img: c.image_url || '',
+  excerpt: c.subtitle || '',
+  date: (c.meta && c.meta.date) || '',
+  tag: (c.meta && c.meta.tag) || '',
+  read: (c.meta && c.meta.read) || '',
+  alt: (c.meta && c.meta.alt) || c.title,
+})
+const demoOnly = () => { throw new ApiError(0, 'Not available in the demo preview') }
+const adminTok = () => ({ token: tokens.getAdmin() })
 const normNominee = (n) => {
   if (!n || n.categoryId !== undefined) return n
   return {
@@ -100,6 +153,7 @@ const normSettings = (s) => {
     votingOpen: !!s.voting_open,
     resultsPublished: !!s.results_published,
     ceremonyDate: s.ceremony_date || '',
+    ceremonyTime: s.ceremony_time || '',
     ceremonyCity: s.ceremony_city || '',
     ceremonySession: s.ceremony_session || '',
     ceremonyVenue: s.ceremony_venue || '',
@@ -110,7 +164,7 @@ const normSettings = (s) => {
 }
 /* Outbound key map for the admin settings form. */
 const denormSettings = (patch) => {
-  const map = { votingStart: 'voting_start', votingEnd: 'voting_end', ceremonyVenue: 'ceremony_venue', ceremonyDate: 'ceremony_date', ceremonyCity: 'ceremony_city', ceremonySession: 'ceremony_session', termsVersion: 'terms_version', edition: 'edition', awardsPerCategory: 'awards_per_category' }
+  const map = { votingStart: 'voting_start', votingEnd: 'voting_end', ceremonyVenue: 'ceremony_venue', ceremonyDate: 'ceremony_date', ceremonyTime: 'ceremony_time', ceremonyCity: 'ceremony_city', ceremonySession: 'ceremony_session', termsVersion: 'terms_version', edition: 'edition', awardsPerCategory: 'awards_per_category' }
   const out = {}
   for (const [k, v] of Object.entries(patch || {})) out[map[k] || k] = v
   return out
@@ -155,27 +209,51 @@ const normVoterStats = (s) => {
   }
 }
 
+let settingsCache = null
+
 export const Store = {
   mode: getMode,
 
   /* ---------- reference data ---------- */
   categories: () => call(() => Demo.CATEGORIES, () => api.get('/categories').then((r) => normCategories(listOf(r)))),
-  settings: () => call(() => Demo.settings(), () => api.get('/settings').then((r) => normSettings(oneOf(r)))),
+  /* Public settings are read by most pages; one shared request per 30s. */
+  settings: () => call(() => Demo.settings(), () => {
+    if (!settingsCache || Date.now() - settingsCache.at > 30000) {
+      const p = api.get('/settings').then((r) => normSettings(oneOf(r)))
+      settingsCache = { at: Date.now(), p }
+      p.catch(() => { settingsCache = null })
+    }
+    return settingsCache.p
+  }),
   saveSettings: (patch) =>
     call(() => Demo.saveSettings(patch),
-      () => api.patch('/admin/settings', { settings: denormSettings(patch) }, { token: tokens.getAdmin() }).then((r) => normSettings(oneOf(r)))),
+      () => api.patch('/admin/settings', { settings: denormSettings(patch) }, { token: tokens.getAdmin() }).then((r) => {
+        settingsCache = null
+        return normSettings(oneOf(r))
+      })),
   votingState: () => call(() => Demo.votingState(), () => api.get('/voting/state').then((r) => oneOf(r).state)),
-  countdownTarget: () => call(() => Demo.countdownTarget(), async () => {
-    const [s, v] = await Promise.all([Store.settings(), api.get('/voting/state').then((r) => oneOf(r).state)])
-    const upcoming = v === 'upcoming'
-    return (upcoming ? s.votingStart : s.votingEnd) || null
+  /* kind 'voting': next voting milestone (opens / closes).
+     kind 'ceremony': the awards ceremony (Dubai time). */
+  countdownTarget: (kind = 'voting') => call(() => {
+    if (kind !== 'ceremony') return Demo.countdownTarget()
+    return Demo.settings().ceremony
+  }, async () => {
+    const s = await Store.settings()
+    if (kind === 'ceremony') {
+      if (!s.ceremonyDate) return null
+      return `${s.ceremonyDate}T${/^\d{2}:\d{2}$/.test(s.ceremonyTime) ? s.ceremonyTime : '00:00'}:00+04:00`
+    }
+    const v = await api.get('/voting/state').then((r) => oneOf(r).state)
+    /* The window covers whole Dubai days: start-of-day open, end-of-day close. */
+    if (v === 'upcoming') return s.votingStart ? `${s.votingStart}T00:00:00+04:00` : null
+    return s.votingEnd ? `${s.votingEnd}T23:59:59+04:00` : null
   }),
   category: (id) => call(() => Demo.category(id),
     () => api.get('/categories').then((r) => normCategory(normCategories(listOf(r)).find((c) => String(c.id) === String(id)) || null))),
 
   /* ---------- nominees ---------- */
   allNominees: () => call(() => Demo.all(),
-    () => api.get('/admin/nominees', { token: tokens.getAdmin() }).then((r) => normNominees(listOf(r)))),
+    () => api.get('/admin/nominees?per_page=500', adminTok()).then((r) => normNominees(listOf(r)))),
   getNominee: (id) => call(() => Demo.get(id), () => api.get(`/nominees/${id}`).then((r) => normNominee(oneOf(r)))),
   approved: () => call(() => Demo.approved(), () => api.get('/nominees?status=approved').then((r) => normNominees(listOf(r)))),
   byCategory: (catId, onlyApproved = true) =>
@@ -217,10 +295,10 @@ export const Store = {
   }),
   setNominationStatus: (id, status, notes) =>
     call(() => Demo.setNominationStatus(id, status, notes),
-      () => api.patch(`/admin/nominations/${id}`, { status, review_notes: notes }, { token: tokens.getAdmin() }).then(oneOf)),
+      () => api.patch(`/admin/nominees/${id}`, { status: status === 'submitted' ? 'pending' : status }, adminTok()).then((r) => normNominee(oneOf(r)))),
   removeNomination: (id) =>
     call(() => { Demo.setNominationStatus(id, 'rejected', 'Removed by admin'); return true },
-      () => api.del(`/admin/nominations/${id}`, { token: tokens.getAdmin() }).then(() => true)),
+      () => api.del(`/admin/nominees/${id}`, adminTok()).then(() => true)),
 
   /* ---------- influencer auth ---------- */
   login: (email, password) =>
@@ -273,7 +351,7 @@ export const Store = {
 
   recentVotes: (limit = 50) =>
     call(() => Demo.recentVotes(limit),
-      () => api.get(`/admin/votes?limit=${limit}`, { token: tokens.getAdmin() }).then(listOf)),
+      () => api.get(`/admin/votes?per_page=${Math.min(500, limit)}`, adminTok()).then((r) => listOf(r).map(normVote))),
   invalidateVote: (voteId, reason) =>
     call(() => Demo.invalidateVote(voteId, reason),
       () => api.post(`/admin/votes/${voteId}/invalidate`, { reason }, { token: tokens.getAdmin() }).then(() => true)),
@@ -331,19 +409,21 @@ export const Store = {
       guests_count: Number(d.guests) || 1,
     }).then(() => true)),
   rsvps: () => call(() => { try { return JSON.parse(localStorage.getItem('pfa_db_v2')).rsvps || [] } catch { return [] } },
-    () => api.get('/admin/rsvps', { token: tokens.getAdmin() }).then(listOf)),
-  toggleCheckIn: (id) =>
+    () => api.get('/admin/rsvps?per_page=500', adminTok()).then((r) => listOf(r).map(normRsvp))),
+  toggleCheckIn: (id, checkedIn = false) =>
     call(() => { Demo.toggleCheckIn(id); return true },
-      () => api.post(`/admin/rsvps/${id}/checkin`, {}, { token: tokens.getAdmin() }).then(() => true)),
+      () => (checkedIn
+        ? api.del(`/admin/rsvps/${id}/checkin`, adminTok())
+        : api.post(`/admin/rsvps/${id}/checkin`, {}, adminTok())).then(() => true)),
   addEnquiry: (d) => call(() => { Demo.addEnquiry(d); return true }, () => api.post('/enquiries', d).then(() => true)),
   enquiries: () => call(() => { try { return JSON.parse(localStorage.getItem('pfa_db_v2')).enquiries || [] } catch { return [] } },
-    () => api.get('/admin/enquiries', { token: tokens.getAdmin() }).then(listOf)),
+    () => api.get('/admin/enquiries?per_page=500', adminTok()).then((r) => listOf(r).map(normEnquiry))),
   markEnquiryRead: (id) =>
     call(() => { Demo.markEnquiryRead(id); return true },
       () => api.patch(`/admin/enquiries/${id}`, { read: true }, { token: tokens.getAdmin() }).then(() => true)),
   auditLog: (limit = 100) =>
     call(() => Demo.auditLog(limit),
-      () => api.get(`/admin/audit?limit=${limit}`, { token: tokens.getAdmin() }).then(listOf)),
+      () => api.get(`/admin/audit?per_page=${Math.min(500, limit)}`, adminTok()).then((r) => listOf(r).map(normAudit))),
   exportCsv: async (kind) => {
     if (mode === 'api') {
       const r = await fetch(`${API_BASE}/admin/export/${kind}`, {
@@ -367,6 +447,42 @@ export const Store = {
       async () => { try { await api.post('/admin/logout', {}, { token: tokens.getAdmin() }) } catch {} tokens.setAdmin(null); return true }),
 
   resetDemo: () => { if (DEMO_ENABLED && mode === 'demo') Demo.resetDemo(); return Promise.resolve(true) },
+
+  /* ---------- website content (public) ---------- */
+  content: (type) => call(() => demoContent(type).map(normContent),
+    () => api.get(`/content/${type}`).then((r) => listOf(r).map(normContent))),
+  article: (slug) => call(() => { const a = demoContent('news').find((x) => x.slug === slug); return a ? normContent(a) : null },
+    () => api.get(`/content/news/${encodeURIComponent(slug)}`).then((r) => normContent(oneOf(r))).catch((e) => {
+      if (e instanceof ApiError && e.status === 404) return null
+      throw e
+    })),
+
+  /* ---------- admin: full CRUD over site data ---------- */
+  adminMe: () => call(() => ({ name: 'Demo Admin', email: 'demo', role: 'super_admin' }),
+    () => api.get('/auth/me', adminTok()).then(oneOf)),
+
+  adminContent: (type) => call(() => demoContent(type).map(normContent),
+    () => api.get(`/admin/content?type=${type}`, adminTok()).then((r) => listOf(r).map(normContent))),
+  saveContent: (id, data) => call(demoOnly,
+    () => (id ? api.patch(`/admin/content/${id}`, data, adminTok()) : api.post('/admin/content', data, adminTok())).then((r) => normContent(oneOf(r)))),
+  deleteContent: (id) => call(demoOnly, () => api.del(`/admin/content/${id}`, adminTok()).then(() => true)),
+
+  adminCategories: () => call(() => Demo.CATEGORIES,
+    () => api.get('/admin/categories', adminTok()).then((r) => normCategories(listOf(r)))),
+  saveCategory: (id, data) => call(demoOnly,
+    () => (id ? api.patch(`/admin/categories/${id}`, data, adminTok()) : api.post('/admin/categories', data, adminTok())).then((r) => normCategory(oneOf(r)))),
+  deleteCategory: (id) => call(demoOnly, () => api.del(`/admin/categories/${id}`, adminTok()).then(() => true)),
+
+  saveNominee: (id, data) => call(demoOnly,
+    () => (id ? api.patch(`/admin/nominees/${id}`, data, adminTok()) : api.post('/admin/nominees', data, adminTok())).then((r) => normNominee(oneOf(r)))),
+
+  users: () => call(() => [], () => api.get('/admin/users', adminTok()).then(listOf)),
+  saveUser: (id, data) => call(demoOnly,
+    () => (id ? api.patch(`/admin/users/${id}`, data, adminTok()) : api.post('/admin/users', data, adminTok())).then(oneOf)),
+  deleteUser: (id) => call(demoOnly, () => api.del(`/admin/users/${id}`, adminTok()).then(() => true)),
+
+  deleteRsvp: (id) => call(demoOnly, () => api.del(`/admin/rsvps/${id}`, adminTok()).then(() => true)),
+  deleteEnquiry: (id) => call(demoOnly, () => api.del(`/admin/enquiries/${id}`, adminTok()).then(() => true)),
 
   /* ---------- formatting helpers ---------- */
   fmt, initials, fmtTime,

@@ -16,6 +16,8 @@ class CategoryResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'description' => $this->description,
+            'tagline' => $this->tagline,
+            'image_url' => $this->image_url,
             'sort_order' => $this->sort_order,
             'nominees_count' => $this->whenCounted('nominees'),
             'nominees' => NomineeResource::collection($this->whenLoaded('nominees')),

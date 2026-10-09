@@ -12,7 +12,7 @@ class Category extends Model
      *
      * @var array<int, string>
      */
-    protected $fillable = ['name', 'slug', 'description', 'sort_order'];
+    protected $fillable = ['name', 'slug', 'description', 'tagline', 'image_url', 'sort_order'];
 
     public function nominees(): HasMany
     {

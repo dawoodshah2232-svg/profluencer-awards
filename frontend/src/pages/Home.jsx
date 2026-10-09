@@ -3,18 +3,13 @@ import Countdown from '../components/Countdown'
 import { FaqItem } from '../components/ui'
 import { useAsync } from '../lib/hooks'
 import { Store } from '../lib/store'
+import { assetUrl } from '../lib/assets'
+import { monthDay, shortDate, shortDateYear, useDates, weekdayDate } from '../lib/dates'
 
 const img = (p) => `${import.meta.env.BASE_URL}${p}`
 
-const FAQS = [
-  { q: 'Who can be nominated?', a: 'Individual creators aged 18 or above with at least one publicly accessible, active content profile. You nominate yourself by signing up and selecting one industry category.' },
-  { q: 'How does voting work?', a: 'Open a nominee\u2019s voting link, enter your name, email and phone, and submit. You can vote for one nominee in each of the 10 categories \u2014 up to 10 votes total. The same email or phone number cannot vote twice in one category, and votes cannot be changed once cast.' },
-  { q: 'When is the voting window?', a: 'Voting opens October 15, 2026 and closes November 30, 2026. Winners are crowned at the awards afternoon on December 11, 2026 in Dubai.' },
-  { q: 'What happens in a tie?', a: 'Tied nominees are ordered by who reached the final vote total first, then by earlier approval time. The rule is published before voting begins and applied identically to everyone.' },
-  { q: 'Is nomination free?', a: 'Yes. Nomination and voting are completely free. Every approved nominee receives a voting link, a live dashboard and ceremony invitations.' },
-]
-
 export default function Home() {
+  const dates = useDates()
   const { data: cats = [] } = useAsync(() => Store.categories(), [])
   const { data: counts } = useAsync(async () => {
     const list = await Store.categories()
@@ -22,29 +17,33 @@ export default function Home() {
     for (const c of list) out[c.id] = await Store.approvedCount(c.id)
     return out
   }, [])
+  const { data: faqs = [] } = useAsync(() => Store.content('faq').then((l) => {
+    const home = l.filter((f) => f.meta && f.meta.home)
+    return (home.length ? home : l).slice(0, 6)
+  }), [])
 
   return (
     <>
       <div className="hero">
         <div className="hero-bg" style={{ backgroundImage: `url(${img('img/hero.jpg')})` }} />
         <div className="container hero-content">
-          <span className="eyebrow">Voting Oct 15 &ndash; Nov 30, 2026</span>
+          <span className="eyebrow">Voting {shortDate(dates.votingStart)} &ndash; {shortDateYear(dates.votingEnd)}</span>
           <h1>The <span className="gold">ProFluencer</span> Awards 2026</h1>
           <p className="lead">10 industries. 50 golden trophies. Decided entirely by verified public vote &mdash; no juries, no politics. Nominate yourself, share your voting link, and let your audience carry you to the stage.</p>
           <div className="hero-ctas">
             <Link className="btn btn-gold" to="/nominate">Nominate Yourself</Link>
             <Link className="btn btn-ghost" to="/nominees">Vote for a Nominee</Link>
           </div>
-          <Countdown />
+          <Countdown kind="ceremony" />
         </div>
       </div>
 
       <div className="stats-band">
         <div className="stats-grid">
-          <div className="stat"><b>10</b><span>Industry Categories</span></div>
-          <div className="stat"><b>50</b><span>Golden Trophies</span></div>
+          <div className="stat"><b>{cats.length || 10}</b><span>Industry Categories</span></div>
+          <div className="stat"><b>{(cats.length || 10) * 5}</b><span>Golden Trophies</span></div>
           <div className="stat"><b>1</b><span>Vote per Category</span></div>
-          <div className="stat"><b>Dec 11</b><span>Awards Afternoon</span></div>
+          <div className="stat"><b>{shortDate(dates.ceremonyDate)}</b><span>Awards Afternoon</span></div>
         </div>
       </div>
 
@@ -58,7 +57,7 @@ export default function Home() {
             <div className="step"><div className="n">1</div><h3>Nominate yourself</h3><p>Create your profile in minutes and choose your industry category. Our team reviews every nomination for authenticity.</p></div>
             <div className="step"><div className="n">2</div><h3>Get your voting link</h3><p>Once approved, you receive a personal voting link with a QR code. Share it anywhere your audience lives.</p></div>
             <div className="step"><div className="n">3</div><h3>Fans vote &mdash; verified</h3><p>Each voter registers with name, email and phone and can vote for one nominee per category. Fair, transparent, one tap.</p></div>
-            <div className="step"><div className="n">4</div><h3>Winners crowned Dec 11</h3><p>The top 5 of each category are honoured live at the awards afternoon in Dubai. Rank 1 takes the category crown.</p></div>
+            <div className="step"><div className="n">4</div><h3>Winners crowned {shortDate(dates.ceremonyDate)}</h3><p>The top 5 of each category are honoured live at the awards afternoon in {dates.ceremonyCity}. Rank 1 takes the category crown.</p></div>
           </div>
           <div className="center mt"><Link className="btn btn-ghost" to="/voting">Read the full voting rules</Link></div>
         </div>
@@ -67,14 +66,14 @@ export default function Home() {
       <section style={{ paddingTop: 20 }}>
         <div className="container">
           <div className="center">
-            <span className="eyebrow">10 categories &middot; 50 awards</span>
+            <span className="eyebrow">{cats.length || 10} categories &middot; {(cats.length || 10) * 5} awards</span>
             <h2 className="sec-title">Every industry gets its moment</h2>
             <p className="sec-sub">Each category honours its top 5 nominees &mdash; ranked purely by valid public votes. Rank 1 is crowned Category Winner.</p>
           </div>
           <div className="cat-grid">
             {cats.map((c) => (
               <Link className="cat-card" key={c.id} to={`/nominees?cat=${c.id}`}>
-                <div className="ph"><img loading="lazy" src={img(c.img)} alt={c.name} /></div>
+                <div className="ph"><img loading="lazy" src={assetUrl(c.img)} alt={c.name} /></div>
                 <div className="ov" />
                 <div className="info">
                   <span className="top5-badge">5 Awards</span>
@@ -113,15 +112,15 @@ export default function Home() {
         <div className="container">
           <div className="center">
             <span className="eyebrow" style={{ color: '#9c7a1e' }}>The big afternoon</span>
-            <h2 className="sec-title">Awards afternoon &middot; December 11</h2>
+            <h2 className="sec-title">Awards afternoon &middot; {monthDay(dates.ceremonyDate)}</h2>
             <p className="sec-sub">Black tie, golden lights, and 50 winners walking the stage as their names light up the hall.</p>
           </div>
           <div className="cer-grid">
             <div className="cer-img"><img src={img('img/ceremony.jpg')} alt="ProFluencer Awards ceremony celebration" /></div>
             <div>
               <div className="cer-facts">
-                <div className="cer-fact"><b>Friday, Dec 11 2026</b><span>Afternoon session &middot; Dubai</span></div>
-                <div className="cer-fact"><b>Dubai, UAE</b><span>Venue announced soon</span></div>
+                <div className="cer-fact"><b>{weekdayDate(dates.ceremonyDate)}</b><span>Afternoon session &middot; {dates.ceremonyCity}</span></div>
+                <div className="cer-fact"><b>{dates.ceremonyCity}, UAE</b><span>{dates.ceremonyVenue || 'Venue announced soon'}</span></div>
                 <div className="cer-fact"><b>50 honourees</b><span>Top 5 of each industry</span></div>
                 <div className="cer-fact"><b>Live audience</b><span>Fans, brands &amp; media</span></div>
               </div>
@@ -139,7 +138,7 @@ export default function Home() {
             <h2 className="sec-title">Everything you need to know</h2>
           </div>
           <div className="faq">
-            {FAQS.map((f, i) => <FaqItem key={i} q={f.q} a={f.a} />)}
+            {faqs.map((f) => <FaqItem key={f.id} q={f.title} a={f.body} />)}
           </div>
           <div className="center mt"><Link className="btn btn-gold" to="/nominate">Start your nomination</Link></div>
         </div>

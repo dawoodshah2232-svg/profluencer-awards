@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Field } from '../components/ui'
 import { Store } from '../lib/store'
+import { useDates, weekdayDate } from '../lib/dates'
 
 const img = (p) => `${import.meta.env.BASE_URL}${p}`
 
 export default function Event() {
+  const dates = useDates()
   const [form, setForm] = useState({ name: '', email: '', mobile: '', guests: '1', type: 'guest' })
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -25,7 +27,7 @@ export default function Event() {
 
   return (
     <>
-      <div className="ceremony" style={{ paddingTop: 80 }}>
+      <div className="ceremony" style={{ paddingTop: 140 }}>
         <div className="container">
           <div className="center">
             <span className="eyebrow" style={{ color: '#9c7a1e' }}>You are invited</span>
@@ -36,8 +38,8 @@ export default function Event() {
             <div className="cer-img"><img src={img('img/ceremony.jpg')} alt="Awards ceremony celebration" /></div>
             <div>
               <div className="cer-facts">
-                <div className="cer-fact"><b>Friday, Dec 11, 2026</b><span>Afternoon session &middot; Dubai</span></div>
-                <div className="cer-fact"><b>Dubai, UAE</b><span>Venue announced soon</span></div>
+                <div className="cer-fact"><b>{weekdayDate(dates.ceremonyDate)}</b><span>Afternoon session &middot; {dates.ceremonyCity}</span></div>
+                <div className="cer-fact"><b>{dates.ceremonyCity}, UAE</b><span>{dates.ceremonyVenue || 'Venue announced soon'}</span></div>
                 <div className="cer-fact"><b>50 honourees</b><span>Top 5 of every category</span></div>
                 <div className="cer-fact"><b>Evening gala</b><span>Celebrations after the stage</span></div>
               </div>

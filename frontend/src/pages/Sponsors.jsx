@@ -1,14 +1,10 @@
 import { useState } from 'react'
 import { Field, PageHero } from '../components/ui'
+import { useAsync } from '../lib/hooks'
 import { Store } from '../lib/store'
 
-const TIERS = [
-  { name: 'Presenting Partner', desc: 'Your brand opens the show. Trophy naming rights for a category, stage backdrop, broadcast idents and a dedicated winners\u2019 photo moment.' },
-  { name: 'Category Sponsor', desc: 'Own one of the 10 industry categories. Present the awards live on stage and reach every nominee and voter in that vertical.' },
-  { name: 'Gala & Experience Sponsor', desc: 'The after-party, red carpet, creator lounge and gift suite — the moments the internet actually shares.' },
-]
-
 export default function Sponsors() {
+  const { data: tiers = [] } = useAsync(() => Store.content('sponsor_tier'), [])
   const [form, setForm] = useState({ name: '', company: '', email: '', tier: 'Presenting Partner', message: '' })
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -42,11 +38,11 @@ export default function Sponsors() {
       <section style={{ paddingTop: 10 }}>
         <div className="container">
           <div className="steps" style={{ gridTemplateColumns: '1fr' }}>
-            {TIERS.map((t) => (
-              <div className="step" key={t.name}>
+            {tiers.map((t) => (
+              <div className="step" key={t.id}>
                 <div className="n">&#9670;</div>
-                <h3>{t.name}</h3>
-                <p>{t.desc}</p>
+                <h3>{t.title}</h3>
+                <p>{t.body}</p>
               </div>
             ))}
           </div>
@@ -65,7 +61,7 @@ export default function Sponsors() {
                   <Field label="Email *"><input value={form.email} onChange={set('email')} type="email" /></Field>
                   <Field label="Tier of interest">
                     <select value={form.tier} onChange={set('tier')}>
-                      {['Presenting Partner', 'Category Sponsor', 'Gala & Experience Sponsor', 'Not sure yet'].map((t) => <option key={t}>{t}</option>)}
+                      {[...tiers.map((t) => t.title), 'Not sure yet'].map((t) => <option key={t}>{t}</option>)}
                     </select>
                   </Field>
                 </div>

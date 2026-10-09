@@ -40,13 +40,19 @@ class CategorySeeder extends Seeder
         ];
     }
 
+    /**
+     * Seeds the default categories only into an empty table. Categories are
+     * admin-managed after that, and deploys run db:seed every time, so a
+     * re-seed must never undo an edit or bring back a deleted category.
+     */
     public function run(): void
     {
+        if (Category::query()->exists()) {
+            return;
+        }
+
         foreach (self::categories() as $category) {
-            Category::query()->updateOrCreate(
-                ['slug' => $category['slug']],
-                $category
-            );
+            Category::query()->create($category);
         }
     }
 }

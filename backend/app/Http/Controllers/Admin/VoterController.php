@@ -26,7 +26,7 @@ class VoterController extends Controller
                 ->orWhere('phone_display', 'like', $search));
         }
 
-        return VoterResource::collection($query->paginate(50))->response();
+        return VoterResource::collection($query->paginate(min(500, max(1, $request->integer('per_page', 50)))))->response();
     }
 
     public function show(Voter $voter): JsonResponse

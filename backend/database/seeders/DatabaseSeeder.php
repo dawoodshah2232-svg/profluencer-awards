@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             SettingSeeder::class,
             AdminUserSeeder::class,
             DemoInfluencerSeeder::class,
+            SiteContentSeeder::class,
         ]);
     }
 }

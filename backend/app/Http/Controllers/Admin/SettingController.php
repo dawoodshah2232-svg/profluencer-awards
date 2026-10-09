@@ -19,6 +19,7 @@ class SettingController extends Controller
         'voting_start',
         'voting_end',
         'ceremony_date',
+        'ceremony_time',
         'ceremony_city',
         'ceremony_session',
         'ceremony_venue',

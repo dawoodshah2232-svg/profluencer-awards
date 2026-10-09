@@ -32,7 +32,7 @@ class VoteAdminController extends Controller
             $query->where('nominee_id', $request->integer('nominee_id'));
         }
 
-        return VoteResource::collection($query->paginate(50))->response();
+        return VoteResource::collection($query->paginate(min(500, max(1, $request->integer('per_page', 50)))))->response();
     }
 
     public function show(Vote $vote): JsonResponse

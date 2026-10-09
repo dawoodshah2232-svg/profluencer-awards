@@ -1,16 +1,22 @@
 import { Link, useParams } from 'react-router-dom'
 import { Chip, PageHero } from '../components/ui'
-import { ARTICLES } from '../data/news'
-
-const img = (p) => `${import.meta.env.BASE_URL}${p}`
+import { useAsync } from '../lib/hooks'
+import { Store } from '../lib/store'
+import { assetUrl } from '../lib/assets'
+import { longDate, shortDate, useDates } from '../lib/dates'
 
 export default function NewsArticle() {
   const { slug } = useParams()
-  const a = ARTICLES.find((x) => x.slug === slug)
+  const dates = useDates()
+  const { data: a, loading, error } = useAsync(() => Store.article(slug), [slug])
 
-  if (!a) {
+  if (loading) {
+    return <PageHero title="Loading article…" />
+  }
+
+  if (error || !a) {
     return (
-      <PageHero title="Article not found" sub="This story doesn't exist or has moved.">
+      <PageHero title={error ? 'Could not load this article' : 'Article not found'} sub={error ? 'Please try again shortly.' : "This story doesn't exist or has moved."}>
         <div style={{ marginTop: 22 }}><Link className="btn btn-gold" to="/news">Back to news</Link></div>
       </PageHero>
     )
@@ -20,23 +26,24 @@ export default function NewsArticle() {
     <>
       <PageHero>
         <div className="news-wrap">
-          <span className="eyebrow">News &amp; Insights &middot; {a.date}</span>
+          <span className="eyebrow">News &amp; Insights{a.date ? <> &middot; {a.date}</> : null}</span>
           <h1 className="sec-title">{a.title}</h1>
           <div className="article-meta">
-            <Chip>{a.tag}</Chip>
-            <span>{a.read}</span>
+            {a.tag && <Chip>{a.tag}</Chip>}
+            {a.read && <span>{a.read}</span>}
             <span>By ProFluencer Editorial</span>
           </div>
         </div>
       </PageHero>
       <section style={{ paddingTop: 0 }}>
         <div className="container news-wrap">
-          <div className="article-hero"><img src={img(a.img)} alt={a.alt} /></div>
-          <div className="prose" dangerouslySetInnerHTML={{ __html: a.body }} />
+          {a.img && <div className="article-hero"><img src={assetUrl(a.img)} alt={a.alt} /></div>}
+          {/* Article HTML is authored by staff in the admin CRM. */}
+          <div className="prose" dangerouslySetInnerHTML={{ __html: a.body || '' }} />
           <div className="cta-band">
             <span className="eyebrow">Nominations are open</span>
             <h3>Your audience can put you on that stage.</h3>
-            <p>Nomination is free and takes minutes. Get approved, get your voting link, and let your community carry you to the awards afternoon in Dubai on 11 December. Voting runs 15 October – 30 November 2026.</p>
+            <p>Nomination is free and takes minutes. Get approved, get your voting link, and let your community carry you to the awards afternoon in {dates.ceremonyCity} on {longDate(dates.ceremonyDate)}. Voting runs {shortDate(dates.votingStart)} – {longDate(dates.votingEnd)}.</p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link className="btn btn-gold" to="/nominate">Nominate Yourself</Link>
               <Link className="btn btn-ghost" to="/news">More news &amp; insights</Link>

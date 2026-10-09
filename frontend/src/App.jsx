@@ -42,8 +42,22 @@ function Shell() {
     return () => { off1(); off2() }
   }, [])
 
+  /* The admin CRM and the influencer dashboard are full-screen panel apps
+     with their own sidebar; everything else uses the public site layout. */
   return (
-    <Layout demoMode={mode === 'demo'} offline={offline}>
+    <Routes>
+      <Route path="/admin" element={<Admin />} />
+      <Route path="/admin/:section" element={<Admin />} />
+      <Route path="/dashboard" element={<InfluencerDashboard />} />
+      <Route path="/dashboard/:section" element={<InfluencerDashboard />} />
+      <Route path="*" element={<PublicSite demoMode={mode === 'demo'} offline={offline} />} />
+    </Routes>
+  )
+}
+
+function PublicSite({ demoMode, offline }) {
+  return (
+    <Layout demoMode={demoMode} offline={offline}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/categories" element={<Categories />} />
@@ -63,8 +77,6 @@ function Shell() {
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/dashboard" element={<InfluencerDashboard />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

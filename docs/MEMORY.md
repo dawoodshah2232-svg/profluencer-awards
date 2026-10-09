@@ -19,6 +19,18 @@
 - 2026-10-08 — AI context docs added (`docs/`: PRD, ARCHITECTURE, RULES,
   DESIGN, TASKS, MEMORY) — this file.
 
+- 2026-10-09 — Admin CRM + influencer dashboard rebuilt as sidebar panel
+  apps (`PanelShell`, `src/admin.css`, `src/pages/admin/*`); routes
+  `/admin/:section`, `/dashboard/:section`. Admin now has full CRUD:
+  nominees, categories (+tagline/image_url), news / sponsor tiers / FAQs
+  (`site_contents` table, `SiteContentSeeder`), users & logins
+  (`/admin/users`, super_admin/admin only), RSVP delete/undo check-in,
+  enquiry delete, editable dates incl. `ceremony_time`. Public pages read
+  dates/content from the API; home countdown targets the ceremony
+  (Dec 11, 2026). `CategorySeeder` is now insert-only (deploy runs
+  db:seed). `php artisan pfa:user <email> --role=…` creates/resets logins.
+  Header logo enlarged (80px desktop).
+
 ## In progress
 
 - First production deploy through the Actions pipeline; live health
