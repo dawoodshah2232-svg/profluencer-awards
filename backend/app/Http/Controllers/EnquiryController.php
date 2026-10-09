@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Enquiry;
 use App\Rules\NoLineBreaks;
+use App\Services\TemplateMailer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,6 +28,8 @@ class EnquiryController extends Controller
             'subject' => $validated['subject'],
             'message' => $validated['message'],
         ]);
+
+        TemplateMailer::send('enquiry_received', mb_strtolower(trim($validated['email'])), $validated['name']);
 
         return response()->json([
             'message' => 'Thank you for reaching out. Our team will get back to you soon.',

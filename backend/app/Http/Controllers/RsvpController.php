@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\RsvpResource;
 use App\Models\Rsvp;
 use App\Rules\NoLineBreaks;
+use App\Services\TemplateMailer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,6 +31,8 @@ class RsvpController extends Controller
             'guest_type' => $validated['guest_type'] ?? 'guest',
             'guests_count' => $validated['guests_count'] ?? 1,
         ]);
+
+        TemplateMailer::send('rsvp_received', $rsvp->email, $rsvp->name);
 
         return response()->json([
             'data' => new RsvpResource($rsvp),

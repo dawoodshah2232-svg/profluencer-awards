@@ -492,6 +492,27 @@ export const Store = {
   updateMyProfile: (data) => call(demoOnly,
     () => api.patch('/influencer/profile', data, { token: tokens.get() }).then((r) => normNominee(oneOf(r)))),
 
+  /* ---------- admin: email delivery, templates, campaigns ---------- */
+  mailSettings: () => call(demoOnly, () => api.get('/admin/mail-settings', adminTok()).then(oneOf)),
+  saveMailSettings: (d) => call(demoOnly, () => api.put('/admin/mail-settings', d, adminTok()).then(oneOf)),
+  testMail: (to) => call(demoOnly, () => api.post('/admin/mail-settings/test', { to }, { ...adminTok(), timeout: 30000 }).then((r) => r.message)),
+  emailTemplates: () => call(demoOnly, () => api.get('/admin/email-templates', adminTok())),
+  saveEmailTemplate: (id, d) => call(demoOnly,
+    () => (id ? api.patch(`/admin/email-templates/${id}`, d, adminTok()) : api.post('/admin/email-templates', d, adminTok())).then(oneOf)),
+  deleteEmailTemplate: (id) => call(demoOnly, () => api.del(`/admin/email-templates/${id}`, adminTok()).then(() => true)),
+  previewEmailTemplate: (d) => call(demoOnly, () => api.post('/admin/email-templates/preview', d, adminTok()).then(oneOf)),
+  testEmailTemplate: (id, to) => call(demoOnly, () => api.post(`/admin/email-templates/${id}/test`, { to }, { ...adminTok(), timeout: 30000 }).then((r) => r.message)),
+  campaigns: () => call(demoOnly, () => api.get('/admin/campaigns', adminTok())),
+  campaign: (id, params = '') => call(demoOnly, () => api.get(`/admin/campaigns/${id}${params}`, adminTok())),
+  saveCampaign: (id, d) => call(demoOnly,
+    () => (id ? api.patch(`/admin/campaigns/${id}`, d, adminTok()) : api.post('/admin/campaigns', d, adminTok())).then(oneOf)),
+  deleteCampaign: (id) => call(demoOnly, () => api.del(`/admin/campaigns/${id}`, adminTok()).then(() => true)),
+  duplicateCampaign: (id) => call(demoOnly, () => api.post(`/admin/campaigns/${id}/duplicate`, {}, adminTok()).then(oneOf)),
+  audienceCount: (d) => call(demoOnly, () => api.post('/admin/campaigns/audience-count', d, adminTok()).then(oneOf)),
+  /* Both return { data: campaign, processed, pending }. */
+  sendCampaign: (id) => call(demoOnly, () => api.post(`/admin/campaigns/${id}/send`, {}, { ...adminTok(), timeout: 120000 })),
+  processCampaign: (id) => call(demoOnly, () => api.post(`/admin/campaigns/${id}/process`, {}, { ...adminTok(), timeout: 120000 })),
+
   /* ---------- admin: full CRUD over site data ---------- */
   reviewNominee: (id, body) => call(demoOnly,
     () => api.post(`/admin/nominees/${id}/review`, body, adminTok()).then((r) => normNominee(oneOf(r)))),

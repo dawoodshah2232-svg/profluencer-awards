@@ -15,6 +15,7 @@ import Rsvps from './admin/Rsvps'
 import Enquiries from './admin/Enquiries'
 import ContentManager from './admin/Content'
 import Users from './admin/Users'
+import Campaigns from './admin/Campaigns'
 import { Settings, Audit } from './admin/Settings'
 import '../admin.css'
 
@@ -32,6 +33,7 @@ const SECTIONS = {
   sponsors: { title: 'Sponsorship tiers', sub: 'Sponsors page content', icon: 'briefcase' },
   faqs: { title: 'FAQs', sub: 'FAQ page and home page questions', icon: 'question' },
   enquiries: { title: 'Enquiries', sub: 'Contact and sponsorship messages', icon: 'inbox' },
+  campaigns: { title: 'Email campaigns', sub: 'Templates, campaigns, delivery and opens', icon: 'megaphone' },
   users: { title: 'Users & logins', sub: 'Admin and client accounts', icon: 'key' },
   settings: { title: 'Settings', sub: 'Dates, ceremony and edition details', icon: 'cog' },
   audit: { title: 'Audit log', sub: 'Every admin action, append-only', icon: 'clipboard' },
@@ -43,6 +45,7 @@ const GROUPS = [
   ['Event', ['rsvps']],
   ['Website', ['news', 'sponsors', 'faqs']],
   ['Inbox', ['enquiries']],
+  ['Marketing', ['campaigns']],
   ['System', ['users', 'settings', 'audit']],
 ]
 
@@ -132,7 +135,7 @@ export default function Admin() {
   const nav = GROUPS.map(([label, keys]) => ({
     label,
     items: keys
-      .filter((k) => k !== 'users' || !me || me.role !== 'editor')
+      .filter((k) => !['users', 'campaigns'].includes(k) || !me || me.role !== 'editor')
       .map((k) => ({ key: k, label: SECTIONS[k].title, icon: SECTIONS[k].icon, to: k === 'dashboard' ? '/admin' : `/admin/${k}`, badge: badges[k] })),
   }))
   const cur = SECTIONS[section]
@@ -164,6 +167,7 @@ export default function Admin() {
       {section === 'faqs' && <ContentManager type="faq" {...props} />}
       {section === 'enquiries' && <Enquiries {...props} />}
       {section === 'users' && <Users {...props} />}
+      {section === 'campaigns' && <Campaigns {...props} />}
       {section === 'settings' && <Settings {...props} />}
       {section === 'audit' && <Audit {...props} />}
     </PanelShell>

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Rules\NoLineBreaks;
 use App\Services\AuditLogger;
 use App\Services\GoogleIdToken;
+use App\Services\TemplateMailer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -225,6 +226,10 @@ class AuthController extends Controller
         AuditLogger::log('influencer', $user, 'auth.registered', $nominee, [
             'category_id' => $nominee->category_id,
             'via' => $googleSub ? 'google' : 'email',
+        ]);
+
+        TemplateMailer::send('nomination_received', $user->email, $user->name, [
+            'category' => (string) $nominee->category?->name,
         ]);
 
         $response = $this->issueToken($user, null);

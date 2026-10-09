@@ -8,6 +8,120 @@ import { longDate, weekdayDate } from '../../lib/dates'
 
 const day = (s) => String(s || '').slice(0, 10)
 
+const MAIL_PRESETS = {
+  brevo_smtp: { smtp_host: 'smtp-relay.brevo.com', smtp_port: '587', smtp_encryption: 'tls' },
+  cpanel: { smtp_host: 'mail.profluencerawards.com', smtp_port: '465', smtp_encryption: 'ssl' },
+  gmail: { smtp_host: 'smtp.gmail.com', smtp_port: '587', smtp_encryption: 'tls' },
+}
+
+/* Email delivery: Brevo (API key) or any SMTP server. Secrets are stored
+   encrypted on the server and never sent back — leave blank to keep them. */
+function EmailDelivery() {
+  const toast = useToast()
+  const { data: s, reload } = useAsync(() => Store.mailSettings(), [])
+  const [f, setF] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [testTo, setTestTo] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [msg, setMsg] = useState(null) // { ok, text }
+
+  if (s && !f) {
+    setF({
+      driver: s.driver === 'env' ? 'env' : s.driver, from_address: s.from_address || '', from_name: s.from_name || '',
+      smtp_host: s.smtp_host || '', smtp_port: s.smtp_port || '587', smtp_username: s.smtp_username || '',
+      smtp_password: '', smtp_encryption: s.smtp_encryption || 'tls', brevo_api_key: '',
+    })
+  }
+  if (!s || !f) return null
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
+
+  const save = async () => {
+    setMsg(null)
+    if (f.driver !== 'env' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.from_address.trim())) { setMsg({ ok: false, text: 'Enter the sender email (it must be a verified sender in Brevo).' }); return }
+    if (f.driver === 'brevo' && !f.brevo_api_key.trim() && !s.brevo_api_key_set) { setMsg({ ok: false, text: 'Paste your Brevo API key.' }); return }
+    if (f.driver === 'smtp' && !f.smtp_host.trim()) { setMsg({ ok: false, text: 'Enter the SMTP host.' }); return }
+    setBusy(true)
+    try {
+      const body = { ...f, smtp_port: f.smtp_port ? Number(f.smtp_port) : null }
+      for (const k of Object.keys(body)) if (body[k] === '') body[k] = null
+      await Store.saveMailSettings(body)
+      toast('Email settings saved')
+      setF(null); reload()
+    } catch (e) { setMsg({ ok: false, text: errorText(e) }) } finally { setBusy(false) }
+  }
+  const test = async () => {
+    setMsg(null)
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(testTo.trim())) { setMsg({ ok: false, text: 'Enter an email address to send the test to.' }); return }
+    setTesting(true)
+    try { setMsg({ ok: true, text: await Store.testMail(testTo.trim()) }) } catch (e) { setMsg({ ok: false, text: errorText(e) }) } finally { setTesting(false) }
+  }
+
+  const PROVIDERS = [['brevo', 'Brevo API', 'Recommended — API key, no SMTP port needed'], ['smtp', 'SMTP', 'Brevo SMTP, cPanel mail, Gmail or any server'], ['env', 'Server default', 'Use the mail settings from the server .env']]
+
+  return (
+    <Card title="Email delivery" sub="Vote codes, password resets, nomination updates and campaigns are sent with these settings. Save, then send a test email."
+      right={<Btn variant="primary" icon="check" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Btn>}>
+      <div className="provider-grid">
+        {PROVIDERS.map(([k, label, help]) => (
+          <button type="button" key={k} className={`provider${f.driver === k ? ' on' : ''}`} onClick={() => setF((x) => ({ ...x, driver: k }))} aria-pressed={f.driver === k}>
+            <b>{label}</b><span>{help}</span>
+          </button>
+        ))}
+      </div>
+
+      {f.driver !== 'env' && (
+        <div className="form-grid" style={{ marginTop: 16 }}>
+          <Field label="Sender email" hint={f.driver === 'brevo' ? 'Must be a verified sender/domain in Brevo.' : 'Usually the SMTP login address.'}><input value={f.from_address} onChange={set('from_address')} placeholder="noreply@profluencerawards.com" /></Field>
+          <Field label="Sender name"><input value={f.from_name} onChange={set('from_name')} placeholder="ProFluencer Awards" /></Field>
+        </div>
+      )}
+
+      {f.driver === 'brevo' && (
+        <>
+          <Field label="Brevo API key" hint={s.brevo_api_key_set ? `A key is saved (${s.brevo_api_key_hint}). Leave empty to keep it, or paste a new one to replace it.` : 'Brevo → Settings → SMTP & API → API keys → Generate a new API key (starts with xkeysib-).'}>
+            <input type="password" value={f.brevo_api_key} onChange={set('brevo_api_key')} placeholder={s.brevo_api_key_set ? '•••••••••••• saved' : 'xkeysib-…'} autoComplete="off" spellCheck="false" />
+          </Field>
+          <p className="hint"><a href="https://app.brevo.com/settings/keys/api" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold-lt)', fontWeight: 700 }}>Open Brevo API keys</a> · Add and verify your sender under Senders, Domains &amp; Dedicated IPs.</p>
+        </>
+      )}
+
+      {f.driver === 'smtp' && (
+        <>
+          <div className="atool" style={{ marginBottom: 6 }}>
+            <span className="hint">Presets:</span>
+            <Btn size="sm" onClick={() => setF((x) => ({ ...x, ...MAIL_PRESETS.brevo_smtp }))}>Brevo SMTP</Btn>
+            <Btn size="sm" onClick={() => setF((x) => ({ ...x, ...MAIL_PRESETS.cpanel }))}>cPanel mail</Btn>
+            <Btn size="sm" onClick={() => setF((x) => ({ ...x, ...MAIL_PRESETS.gmail }))}>Gmail</Btn>
+          </div>
+          <div className="form-grid">
+            <Field label="SMTP host"><input value={f.smtp_host} onChange={set('smtp_host')} placeholder="smtp-relay.brevo.com" /></Field>
+            <div className="form-grid" style={{ gap: '0 10px' }}>
+              <Field label="Port"><input type="number" value={f.smtp_port} onChange={set('smtp_port')} /></Field>
+              <Field label="Encryption">
+                <select value={f.smtp_encryption} onChange={set('smtp_encryption')}>
+                  <option value="tls">TLS (587)</option><option value="ssl">SSL (465)</option><option value="none">None</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Username"><input value={f.smtp_username} onChange={set('smtp_username')} autoComplete="off" /></Field>
+            <Field label="Password / SMTP key" hint={s.smtp_password_set ? 'Saved. Leave empty to keep it.' : 'For Brevo SMTP use the SMTP key, not your login password.'}>
+              <input type="password" value={f.smtp_password} onChange={set('smtp_password')} placeholder={s.smtp_password_set ? '•••••••• saved' : ''} autoComplete="new-password" />
+            </Field>
+          </div>
+        </>
+      )}
+
+      <div className="divider">Send a test email</div>
+      <div className="atool">
+        <input className="ainput grow" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="you@email.com" style={{ flex: 1 }} />
+        <Btn icon="inbox" onClick={test} disabled={testing}>{testing ? 'Sending…' : 'Send test'}</Btn>
+      </div>
+      <p className="hint">Currently sending with: <Tag tone={s.active_mailer === 'log' ? 'amber' : 'green'}>{s.active_mailer}</Tag>{s.active_mailer === 'log' ? ' — emails are only written to the server log, not delivered.' : ''} Save your changes before testing.</p>
+      {msg && <div className={`alert ${msg.ok ? 'ok' : 'warn'}`} style={{ marginTop: 12 }}>{msg.text}</div>}
+    </Card>
+  )
+}
+
 /* Social sign-in: Google on the creator login and register pages. Only the
    OAuth Client ID is stored — never a client secret. */
 function SocialSignIn({ refreshKey }) {
@@ -131,6 +245,7 @@ export function Settings({ refreshKey, onChanged }) {
         <p className="hint">Website summary: voting {longDate(f.votingStart)} – {longDate(f.votingEnd)} · ceremony {longDate(f.ceremonyDate)}, {f.ceremonyCity}.</p>
       </Card>
 
+      <EmailDelivery />
       <SocialSignIn refreshKey={refreshKey} />
 
       {isDemoMode() && (

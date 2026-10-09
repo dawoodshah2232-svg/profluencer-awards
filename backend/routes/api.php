@@ -2,6 +2,10 @@
 
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\CampaignController;
+use App\Http\Controllers\Admin\EmailTemplateController;
+use App\Http\Controllers\Admin\MailSettingController;
+use App\Http\Controllers\EmailTrackingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContentController as AdminContentController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -73,6 +77,10 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:login');
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:login');
     Route::get('/leaderboard', [DiscoveryController::class, 'leaderboard']);
+
+    // Campaign email links: open-tracking pixel + one-click unsubscribe.
+    Route::get('/e/o/{token}.gif', [EmailTrackingController::class, 'open'])->where('token', '[A-Za-z0-9]+');
+    Route::get('/e/u/{token}', [EmailTrackingController::class, 'unsubscribe'])->where('token', '[A-Za-z0-9]+');
     Route::post('/admin/login', [AuthController::class, 'staffLogin'])->middleware('throttle:login');
 
     // -- Authenticated --------------------------------------------------
@@ -150,8 +158,30 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/content/{content}', [AdminContentController::class, 'update']);
             Route::delete('/content/{content}', [AdminContentController::class, 'destroy']);
 
-            // Login accounts (staff + influencer clients): super_admin / admin only.
+            // Login accounts (staff + influencer clients), email delivery and
+            // campaigns: super_admin / admin only.
             Route::middleware('role:super_admin,admin')->group(function (): void {
+                Route::get('/mail-settings', [MailSettingController::class, 'show']);
+                Route::put('/mail-settings', [MailSettingController::class, 'update']);
+                Route::post('/mail-settings/test', [MailSettingController::class, 'test']);
+
+                Route::get('/email-templates', [EmailTemplateController::class, 'index']);
+                Route::post('/email-templates', [EmailTemplateController::class, 'store']);
+                Route::post('/email-templates/preview', [EmailTemplateController::class, 'preview']);
+                Route::patch('/email-templates/{template}', [EmailTemplateController::class, 'update']);
+                Route::delete('/email-templates/{template}', [EmailTemplateController::class, 'destroy']);
+                Route::post('/email-templates/{template}/test', [EmailTemplateController::class, 'test']);
+
+                Route::get('/campaigns', [CampaignController::class, 'index']);
+                Route::post('/campaigns', [CampaignController::class, 'store']);
+                Route::post('/campaigns/audience-count', [CampaignController::class, 'audienceCount']);
+                Route::get('/campaigns/{campaign}', [CampaignController::class, 'show']);
+                Route::patch('/campaigns/{campaign}', [CampaignController::class, 'update']);
+                Route::delete('/campaigns/{campaign}', [CampaignController::class, 'destroy']);
+                Route::post('/campaigns/{campaign}/send', [CampaignController::class, 'send']);
+                Route::post('/campaigns/{campaign}/process', [CampaignController::class, 'process']);
+                Route::post('/campaigns/{campaign}/duplicate', [CampaignController::class, 'duplicate']);
+
                 Route::get('/users', [UserController::class, 'index']);
                 Route::post('/users', [UserController::class, 'store']);
                 Route::patch('/users/{user}', [UserController::class, 'update']);

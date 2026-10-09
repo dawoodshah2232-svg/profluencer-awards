@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\NomineeResource;
 use App\Models\Nominee;
 use App\Services\AuditLogger;
+use App\Services\TemplateMailer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -135,6 +136,17 @@ class NomineeController extends Controller
             'decision' => $validated['decision'],
             'checks_passed' => count(array_filter($checks)).'/'.count($checks),
         ]);
+
+        // Let the nominee know (approved / changes requested / rejected).
+        $mailKey = ['approved' => 'nomination_approved', 'changes_requested' => 'nomination_changes', 'rejected' => 'nomination_rejected'][$validated['decision']] ?? null;
+        $account = $nominee->influencerAccount()->with('user')->first()?->user;
+        if ($mailKey !== null && $account !== null) {
+            TemplateMailer::send($mailKey, $account->email, $account->name, [
+                'category' => (string) $nominee->category?->name,
+                'voting_link' => TemplateMailer::votingLink($nominee->id),
+                'notes' => (string) ($validated['notes'] ?? ''),
+            ]);
+        }
 
         $request->attributes->set('expose_votes', true);
 

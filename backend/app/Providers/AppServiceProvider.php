@@ -2,7 +2,13 @@
 
 namespace App\Providers;
 
+use App\Mail\TemplateMail;
+use App\Mail\Transport\BrevoTransport;
+use App\Models\EmailTemplate;
+use App\Services\EmailRenderer;
+use App\Services\MailSettings;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Http\Request;
@@ -53,7 +59,15 @@ class AppServiceProvider extends ServiceProvider
 
             return $frontend.'/#/reset-password?token='.urlencode($token).'&email='.urlencode($user->getEmailForPasswordReset());
         });
-        ResetPassword::toMailUsing(function ($user, string $token): MailMessage {
+        ResetPassword::toMailUsing(function ($user, string $token): MailMessage|TemplateMail {
+            $url = call_user_func(ResetPassword::$createUrlCallback, $user, $token);
+            $template = EmailTemplate::query()->where('key', 'password_reset')->first();
+            if ($template !== null) {
+                $out = EmailRenderer::render($template, ['name' => $user->name, 'email' => $user->email, 'reset_url' => $url]);
+
+                return (new TemplateMail($out['subject'], $out['html'], $out['text'], 'password_reset'))->to($user->email, $user->name);
+            }
+
             return (new MailMessage)
                 ->subject('Reset your ProFluencer Awards password')
                 ->greeting('Hello '.$user->name.',')
@@ -63,5 +77,9 @@ class AppServiceProvider extends ServiceProvider
                     : url('/'))
                 ->line('This link expires in 60 minutes. If you did not ask for a reset, you can ignore this email.');
         });
+
+        // Email delivery chosen in Admin → Settings (Brevo API or SMTP).
+        Mail::extend('brevo', fn (array $config) => new BrevoTransport((string) ($config['key'] ?? '')));
+        MailSettings::apply();
     }
 }

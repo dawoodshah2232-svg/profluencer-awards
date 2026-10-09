@@ -77,7 +77,7 @@ export function Tag({ children, tone }) {
 }
 
 /* Modal dialog. Closes on Escape and backdrop click. */
-export function Modal({ title, onClose, children, footer, wide = false }) {
+export function Modal({ title, onClose, children, footer, wide = false, xl = false }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -86,7 +86,7 @@ export function Modal({ title, onClose, children, footer, wide = false }) {
   }, [onClose])
   return (
     <div className="amodal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className={`amodal${wide ? ' wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`amodal${wide ? ' wide' : ''}${xl ? ' xl' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="amodal-head">
           <h3>{title}</h3>
           <button type="button" onClick={onClose} aria-label="Close"><Icon name="close" /></button>

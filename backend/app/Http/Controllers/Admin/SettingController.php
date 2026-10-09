@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\AuditLogger;
+use App\Services\MailSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -33,7 +34,7 @@ class SettingController extends Controller
     public function index(): JsonResponse
     {
         return response()->json([
-            'data' => Setting::query()->orderBy('key')->get()->mapWithKeys(
+            'data' => Setting::query()->whereNotIn('key', MailSettings::secretKeys())->orderBy('key')->get()->mapWithKeys(
                 fn (Setting $s): array => [$s->key => $s->value]
             ),
         ]);
@@ -64,7 +65,7 @@ class SettingController extends Controller
         }
 
         return response()->json([
-            'data' => Setting::query()->orderBy('key')->get()->mapWithKeys(
+            'data' => Setting::query()->whereNotIn('key', MailSettings::secretKeys())->orderBy('key')->get()->mapWithKeys(
                 fn (Setting $s): array => [$s->key => $s->value]
             ),
             'changed' => array_keys($changed),
