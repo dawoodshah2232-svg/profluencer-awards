@@ -49,6 +49,7 @@ class NomineeController extends Controller
             'country' => ['nullable', 'string', 'max:80'],
             'city' => ['nullable', 'string', 'max:80'],
             'profile_url' => ['nullable', 'url', 'max:255'],
+            'followers' => ['nullable', 'string', 'max:40'],
             'status' => ['nullable', 'string', 'in:pending,approved,rejected,changes_requested'],
         ]);
 
@@ -80,6 +81,7 @@ class NomineeController extends Controller
             'country' => ['nullable', 'string', 'max:80'],
             'city' => ['nullable', 'string', 'max:80'],
             'profile_url' => ['nullable', 'url', 'max:255'],
+            'followers' => ['nullable', 'string', 'max:40'],
             'status' => ['sometimes', 'string', 'in:pending,approved,rejected,changes_requested'],
         ]);
 
@@ -89,6 +91,54 @@ class NomineeController extends Controller
         $request->attributes->set('expose_votes', true);
 
         return response()->json(['data' => new NomineeResource($nominee->fresh())]);
+    }
+
+    /** Verification checklist a reviewer completes before approving a nomination. */
+    public const CHECKS = ['profile_link', 'identity', 'audience', 'category_fit', 'no_duplicate'];
+
+    /**
+     * Genuine-or-fake review of a nomination. Approval requires every check
+     * to be confirmed; the checklist, notes, reviewer and time are stored on
+     * the nominee and audit-logged. Only approved nominees are public and
+     * can receive votes.
+     */
+    public function review(Request $request, Nominee $nominee): JsonResponse
+    {
+        $validated = $request->validate([
+            'decision' => ['required', 'in:approved,rejected,changes_requested,pending'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'checks' => ['nullable', 'array'],
+            'checks.*' => ['boolean'],
+        ]);
+
+        $checks = [];
+        foreach (self::CHECKS as $key) {
+            $checks[$key] = (bool) ($validated['checks'][$key] ?? false);
+        }
+
+        if ($validated['decision'] === Nominee::STATUS_APPROVED && in_array(false, $checks, true)) {
+            return response()->json([
+                'message' => 'Complete every verification check before approving.',
+                'code' => 'VERIFICATION_INCOMPLETE',
+            ], 422);
+        }
+
+        $nominee->update([
+            'status' => $validated['decision'],
+            'review_notes' => $validated['notes'] ?? null,
+            'verification' => $checks + ['reviewer' => $request->user()->name],
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+        ]);
+
+        AuditLogger::log('admin', $request->user(), 'nominee.reviewed', $nominee, [
+            'decision' => $validated['decision'],
+            'checks_passed' => count(array_filter($checks)).'/'.count($checks),
+        ]);
+
+        $request->attributes->set('expose_votes', true);
+
+        return response()->json(['data' => new NomineeResource($nominee->fresh()->load(['category', 'influencerAccount.user']))]);
     }
 
     public function destroy(Request $request, Nominee $nominee): JsonResponse

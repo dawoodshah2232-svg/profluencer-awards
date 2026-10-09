@@ -22,7 +22,15 @@ class Nominee extends Model
      *
      * @var array<int, string>
      */
-    protected $fillable = ['category_id', 'name', 'handle', 'platform', 'bio', 'photo_url', 'mobile', 'country', 'city', 'profile_url', 'status', 'votes_count'];
+    protected $fillable = ['category_id', 'name', 'handle', 'platform', 'bio', 'photo_url', 'mobile', 'country', 'city', 'profile_url', 'followers', 'status', 'votes_count', 'review_notes', 'verification', 'reviewed_by', 'reviewed_at'];
+
+    /**
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'verification' => 'array',
+        'reviewed_at' => 'datetime',
+    ];
 
     public function category(): BelongsTo
     {

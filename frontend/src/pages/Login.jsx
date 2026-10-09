@@ -1,100 +1,97 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Field, PageHero } from '../components/ui'
+import AuthLayout, { OrDivider, PasswordInput } from '../components/AuthLayout'
+import GoogleButton, { useGoogleEnabled } from '../components/GoogleButton'
+import { Field } from '../components/ui'
 import { useAsync } from '../lib/hooks'
 import { Store, isDemoMode } from '../lib/store'
 import { Demo } from '../lib/demoData'
 
-const img = (p) => `${import.meta.env.BASE_URL}${p}`
-
 export default function Login() {
   const navigate = useNavigate()
+  const googleOn = useGoogleEnabled()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   const [demoId, setDemoId] = useState('')
 
   const { data: existing } = useAsync(() => Store.session(), [])
   const { data: demos = [] } = useAsync(async () => {
+    if (!isDemoMode()) return []
     const list = await Store.approved()
     return list.filter((x) => String(x.id).indexOf('seed-') === 0).slice(0, 10)
   }, [])
-  const { data: cats = [] } = useAsync(() => Store.categories(), [])
 
   useEffect(() => {
     if (existing) navigate('/dashboard', { replace: true })
   }, [existing, navigate])
-  if (existing) return null
-
-  const catName = (id) => (cats.find((c) => c.id === id) || {}).name || ''
 
   const submit = async (e) => {
     e.preventDefault()
     setError('')
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { setError('Enter the email you registered with.'); return }
+    if (!password) { setError('Enter your password.'); return }
+    setBusy(true)
     try {
-      const inf = await Store.login(email, password)
-      if (!inf) {
-        setError('Email or password not recognized. Check your details or nominate yourself first.')
-        return
-      }
+      const inf = await Store.login(email.trim(), password)
+      if (!inf) { setError('This account has no creator profile. Staff members sign in from the admin panel.'); return }
       navigate('/dashboard')
-    } catch {
-      setError('Could not log in. Try again.')
-    }
+    } catch (err) {
+      setError(err && err.status === 422 ? 'Email or password is incorrect.' : err && err.status === 429 ? 'Too many attempts. Wait a minute and try again.' : 'Could not sign in. Try again.')
+    } finally { setBusy(false) }
   }
 
-  const demoLogin = async () => {
-    if (!demoId) return
-    // Demo shortcut: open the dashboard as a seeded sample profile.
-    Demo.setSession(demoId)
-    navigate('/dashboard')
+  const onGoogle = async (credential) => {
+    setError('')
+    setBusy(true)
+    try {
+      const r = await Store.googleAuth(credential, 'login')
+      if (r.ok) { navigate('/dashboard'); return }
+      if (r.code === 'GOOGLE_NO_ACCOUNT') {
+        navigate('/register', { state: { google: { credential, name: r.name, email: r.email } } })
+        return
+      }
+      setError(r.message || 'Google sign-in failed. Try again.')
+    } catch { setError('Google sign-in failed. Try again.') } finally { setBusy(false) }
   }
 
   return (
-    <>
-      <PageHero>
-        <div className="center" style={{ maxWidth: 520, margin: '0 auto' }}>
-          <img src={img('img/logo-clean.png')} alt="ProFluencer Awards Dubai 2026" style={{ width: 210, maxWidth: '80%', margin: '0 auto 18px' }} />
-          <h1 className="sec-title" style={{ fontSize: 'clamp(26px,5vw,36px)' }}>Influencer Portal</h1>
-          <p className="sec-sub" style={{ margin: '0 auto' }}>Log in to track your votes live.</p>
+    <AuthLayout
+      title="Welcome back"
+      sub="Sign in to your creator dashboard to track votes live and share your voting link."
+      footer={<>New to ProFluencer Awards? <Link className="au-link" to="/register">Create your account</Link></>}
+    >
+      <div className={`form-error${error ? ' show' : ''}`} role="alert">{error}</div>
+      <form onSubmit={submit} noValidate>
+        <Field label="Email">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" autoComplete="email" />
+        </Field>
+        <Field label="Password">
+          <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} />
+        </Field>
+        <div className="au-row">
+          <span />
+          <Link to="/forgot-password">Forgot password?</Link>
         </div>
-      </PageHero>
+        <button className="abtn primary au-submit" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      </form>
 
-      <section style={{ paddingTop: 10 }}>
-        <div className="container" style={{ maxWidth: 480 }}>
-          <div className="form-card">
-            <div className={`form-error${error ? ' show' : ''}`}>{error}</div>
-            <form onSubmit={submit} noValidate>
-              <Field label="Email">
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@email.com" autoComplete="email" />
-              </Field>
-              <Field label="Password">
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Your password" autoComplete="current-password" />
-              </Field>
-              <button className="btn btn-gold btn-block" type="submit">Log in to dashboard</button>
-              <p className="hint center" style={{ marginTop: 14 }}>Not nominated yet? <Link to="/nominate" style={{ color: 'var(--gold-lt)', fontWeight: 700 }}>Create your nomination</Link></p>
-            </form>
+      {googleOn && <OrDivider />}
+      <GoogleButton onCredential={onGoogle} text="signin_with" />
 
-            {isDemoMode() && (
-            <>
-            <div className="divider">Demo access</div>
-            <p style={{ fontSize: 13.5, color: 'var(--muted)', marginBottom: 12 }}>
-              <span className="demo-tag">Demo</span>&nbsp; Explore a dashboard instantly with a seeded sample profile. Not real people, not real votes.
-            </p>
-            <Field label="Sample nominee">
-              <select value={demoId} onChange={(e) => setDemoId(e.target.value)}>
-                <option value="">Select a sample profile…</option>
-                {demos.map((x) => (
-                  <option key={x.id} value={x.id}>{x.name} — {catName(x.categoryId)}</option>
-                ))}
-              </select>
-            </Field>
-            <button className="btn btn-ghost btn-block" type="button" onClick={demoLogin} disabled={!demoId}>Open demo dashboard</button>
-            </>
-            )}
-          </div>
-        </div>
-      </section>
-    </>
+      {isDemoMode() && demos.length > 0 && (
+        <>
+          <OrDivider />
+          <Field label="Demo — open a sample dashboard">
+            <select value={demoId} onChange={(e) => setDemoId(e.target.value)}>
+              <option value="">Select a sample profile…</option>
+              {demos.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          </Field>
+          <button className="abtn au-submit" type="button" disabled={!demoId} onClick={() => { Demo.setSession(demoId); navigate('/dashboard') }}>Open demo dashboard</button>
+        </>
+      )}
+    </AuthLayout>
   )
 }

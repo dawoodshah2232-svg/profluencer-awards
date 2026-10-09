@@ -8,7 +8,6 @@ import Home from './pages/Home'
 import Categories from './pages/Categories'
 import Nominees from './pages/Nominees'
 import NomineeDetail from './pages/NomineeDetail'
-import Nominate from './pages/Nominate'
 import Winners from './pages/Winners'
 import Event from './pages/Event'
 import Sponsors from './pages/Sponsors'
@@ -21,6 +20,9 @@ import Faq from './pages/Faq'
 import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
 import Login from './pages/Login'
+import Register from './pages/Register'
+import { ForgotPassword, ResetPassword } from './pages/PasswordReset'
+import Leaderboard from './pages/Leaderboard'
 import Admin from './pages/Admin'
 import InfluencerDashboard from './pages/InfluencerDashboard'
 import NotFound from './pages/NotFound'
@@ -46,6 +48,11 @@ function Shell() {
      with their own sidebar; everything else uses the public site layout. */
   return (
     <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/nominate" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/admin/:section" element={<Admin />} />
       <Route path="/dashboard" element={<InfluencerDashboard />} />
@@ -64,7 +71,7 @@ function PublicSite({ demoMode, offline }) {
         <Route path="/nominees" element={<Nominees />} />
         <Route path="/nominee/:id" element={<NomineeDetail />} />
         <Route path="/vote/:id" element={<VoteRedirect />} />
-        <Route path="/nominate" element={<Nominate />} />
+        <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/winners" element={<Winners />} />
         <Route path="/event" element={<Event />} />
         <Route path="/sponsors" element={<Sponsors />} />
@@ -76,7 +83,6 @@ function PublicSite({ demoMode, offline }) {
         <Route path="/faq" element={<Faq />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
-        <Route path="/login" element={<Login />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

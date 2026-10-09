@@ -4,8 +4,8 @@ import { QRCodeSVG } from 'qrcode.react'
 import Countdown from '../components/Countdown'
 import { VBarChart } from '../components/Charts'
 import PanelShell from '../components/PanelShell'
-import { Btn, Card, StatCard, Tag } from '../components/AdminUI'
-import { Avatar } from '../components/ui'
+import { Btn, Card, StatCard, Tag, errorText } from '../components/AdminUI'
+import { Avatar, Field } from '../components/ui'
 import { useAsync, useCopy, useInterval } from '../lib/hooks'
 import { Store, getMode } from '../lib/store'
 import { assetUrl } from '../lib/assets'
@@ -24,6 +24,61 @@ const SECTIONS = {
   leaderboard: { title: 'Leaderboard', sub: 'Top 5 in your category', icon: 'trophy' },
   ceremony: { title: 'Ceremony', sub: 'The awards afternoon', icon: 'sparkles' },
   profile: { title: 'My profile', sub: 'How you appear on the website', icon: 'user' },
+}
+
+/* Editable while the nomination is not approved; saving sends it back to review. */
+function ProfileEditor({ me, onSaved }) {
+  const toast = useToast()
+  const { data: cats = [] } = useAsync(() => Store.categories(), [])
+  const [f, setF] = useState({
+    name: me.name || '', category_id: me.categoryId || '', handle: me.handle || '', platform: me.platform || '',
+    profile_url: me.profile_url || '', followers: me.followers || '', mobile: me.mobile || '',
+    country: me.country || '', city: me.city || '', bio: me.bio || '',
+  })
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
+
+  const save = async (e) => {
+    e.preventDefault()
+    setErr('')
+    if (f.name.trim().length < 2) { setErr('Enter your display name.'); return }
+    if (f.profile_url && !/^https?:\/\/\S+\.\S+/.test(f.profile_url.trim())) { setErr('The profile link must start with https://'); return }
+    setBusy(true)
+    try {
+      const body = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === 'string' ? (v.trim() || null) : v]))
+      body.category_id = Number(f.category_id)
+      await Store.updateMyProfile(body)
+      toast('Profile updated and sent for review')
+      onSaved()
+    } catch (e2) { setErr(errorText(e2)) } finally { setBusy(false) }
+  }
+
+  return (
+    <Card title="Your nomination profile" sub="Fix anything the awards team asked for, then save — your nomination goes back into the review queue.">
+      {me.reviewNotes && <div className="alert info"><b>Note from the awards team:</b> {me.reviewNotes}</div>}
+      <div className={`form-error${err ? ' show' : ''}`}>{err}</div>
+      <form onSubmit={save} className="pnl" style={{ minHeight: 0, background: 'none' }}>
+        <div className="form-grid">
+          <Field label="Display name"><input value={f.name} onChange={set('name')} /></Field>
+          <Field label="Category">
+            <select value={f.category_id} onChange={set('category_id')}>
+              {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Handle"><input value={f.handle} onChange={set('handle')} /></Field>
+          <Field label="Platform"><input value={f.platform} onChange={set('platform')} /></Field>
+          <div className="span2"><Field label="Public profile link"><input value={f.profile_url} onChange={set('profile_url')} placeholder="https://" /></Field></div>
+          <Field label="Followers"><input value={f.followers} onChange={set('followers')} /></Field>
+          <Field label="Mobile"><input value={f.mobile} onChange={set('mobile')} /></Field>
+          <Field label="Country"><input value={f.country} onChange={set('country')} /></Field>
+          <Field label="City"><input value={f.city} onChange={set('city')} /></Field>
+          <div className="span2"><Field label="Bio"><textarea value={f.bio} onChange={set('bio')} rows="3" /></Field></div>
+        </div>
+        <button className="abtn primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save & send for review'}</button>
+      </form>
+    </Card>
+  )
 }
 
 export default function InfluencerDashboard() {
@@ -130,7 +185,12 @@ export default function InfluencerDashboard() {
         <div className="alert ok"><b>Nomination submitted.</b> Our team will review your profile shortly. Your personal voting link activates as soon as you are approved.</div>
       )}
       {me.status !== 'approved' && section === 'overview' && !params.get('welcome') && (
-        <div className="alert info"><b>Your nomination is {STATUS_LABEL[me.status] || me.status}.</b> Your voting link and QR code unlock once the awards team approves your profile.</div>
+        <div className={`alert ${me.status === 'rejected' ? 'warn' : 'info'}`}>
+          <b>Your nomination is {STATUS_LABEL[me.status] || me.status}.</b>{' '}
+          {me.status === 'changes_requested' || me.status === 'rejected'
+            ? <>{me.reviewNotes ? <>Note from the awards team: &ldquo;{me.reviewNotes}&rdquo;. </> : null}<Link to="/dashboard/profile" style={{ color: '#fff', textDecoration: 'underline' }}>Update your profile</Link> to send it for review again.</>
+            : 'The awards team is verifying your profile. Your voting link and QR code unlock once it is approved.'}
+        </div>
       )}
       {getMode() === 'demo' && <div className="alert info">Demo preview — sample profile and votes, not real.</div>}
 
@@ -254,8 +314,11 @@ export default function InfluencerDashboard() {
         </>
       )}
 
-      {section === 'profile' && (
-        <Card title="Public profile" sub="To change any of these details, contact the awards team — they can update your profile from the admin panel.">
+      {section === 'profile' && me.status !== 'approved' && (
+        <ProfileEditor me={me} onSaved={() => setTick((t) => t + 1)} />
+      )}
+      {section === 'profile' && me.status === 'approved' && (
+        <Card title="Public profile" sub="Your profile is verified and locked while voting runs. To change anything, contact the awards team.">
           <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 18 }}>
             <Avatar name={me.name} photo={assetUrl(me.photo)} size={72} />
             <div><b style={{ fontSize: 18 }}>{me.name}</b><div className="hint">{[me.handle, me.platform].filter(Boolean).join(' · ')}</div></div>

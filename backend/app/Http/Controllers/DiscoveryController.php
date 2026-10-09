@@ -172,6 +172,71 @@ class DiscoveryController extends Controller
     }
 
     /**
+     * Public leaderboard: every category with all of its approved nominees.
+     * Vote counts are only included while voting is live or after results
+     * are published (never leak partial counts outside those windows).
+     * After publication, the admin-confirmed winners lead each category
+     * with their titles; everyone else follows by counted votes.
+     */
+    public function leaderboard(): JsonResponse
+    {
+        $published = Setting::resultsPublished();
+        $visible = Setting::votingIsOpen() || $published;
+
+        $winners = [];
+        if ($published) {
+            $snapshot = ResultSnapshot::query()->latest('version')->first();
+            foreach ($snapshot?->payload['categories'] ?? [] as $row) {
+                foreach ($row['top'] ?? [] as $t) {
+                    $winners[$row['category_id']][$t['nominee_id']] = ['rank' => $t['rank'], 'title' => $t['title']];
+                }
+            }
+        }
+
+        $categories = Category::query()->orderBy('sort_order')->get()->map(function (Category $category) use ($visible, $winners): array {
+            $nominees = $category->approvedNominees()
+                ->when($visible, fn ($q) => $q->orderByDesc('votes_count'))
+                ->orderBy('name')
+                ->get();
+            $catWinners = $winners[$category->id] ?? [];
+
+            if ($catWinners !== []) {
+                $nominees = $nominees->sortBy(fn (Nominee $n) => $catWinners[$n->id]['rank'] ?? 1000 + 1 / (1 + $n->votes_count))->values();
+            }
+
+            $total = (int) $nominees->sum('votes_count');
+
+            return [
+                'id' => $category->id,
+                'name' => $category->name,
+                'slug' => $category->slug,
+                'total_votes' => $visible ? $total : null,
+                'nominees' => $nominees->map(fn (Nominee $n, int $i): array => [
+                    'id' => $n->id,
+                    'name' => $n->name,
+                    'handle' => $n->handle,
+                    'platform' => $n->platform,
+                    'photo_url' => $n->photo_url,
+                    'position' => $visible ? $i + 1 : null,
+                    'votes_count' => $visible ? (int) $n->votes_count : null,
+                    'share' => $visible && $total > 0 ? round($n->votes_count / $total * 100, 1) : null,
+                    'award' => $catWinners[$n->id]['title'] ?? null,
+                ])->all(),
+            ];
+        });
+
+        return response()->json([
+            'data' => [
+                'visible' => $visible,
+                'results_published' => $published,
+                'voting_open' => Setting::votingIsOpen(),
+                'total_votes' => $visible ? (int) Vote::query()->where('status', Vote::STATUS_COUNTED)->count() : null,
+                'categories' => $categories,
+            ],
+        ]);
+    }
+
+    /**
      * Counted votes per day for the trailing N days (site-wide or one nominee).
      */
     public function votesPerDay(Request $request): JsonResponse

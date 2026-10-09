@@ -30,6 +30,21 @@
   (Dec 11, 2026). `CategorySeeder` is now insert-only (deploy runs
   db:seed). `php artisan pfa:user <email> --role=…` creates/resets logins.
   Header logo enlarged (80px desktop).
+- 2026-10-09 (later) — Auth pages (`/login`, `/register` = `/nominate`,
+  `/forgot-password`, `/reset-password`) as split-screen pages outside the
+  site layout; header CTA "Get Started". Google sign-in (GIS button; API
+  verifies the ID token via tokeninfo, settings `google_enabled` /
+  `google_client_id`, users.google_sub). Password reset via Laravel
+  Password broker, link → `#/reset-password`. Nomination verification:
+  `POST /admin/nominees/{id}/review` with a 5-item checklist (all required
+  to approve), notes shown to the nominee; nominees can edit + resubmit
+  until approved (`PATCH /influencer/profile`). Winners: admin confirms
+  order per category (`GET /admin/results/standings`, publish accepts
+  `selections`). Public `/leaderboard` (votes only while live or after
+  publish). Voting page redesigned (stepper, 6-box OTP). Store maps API
+  voting state live/ended → open/closed. Plaintext password storage was
+  requested and declined — admin sees new passwords once (copy card).
+  Apple sign-in not built.
 
 ## In progress
 

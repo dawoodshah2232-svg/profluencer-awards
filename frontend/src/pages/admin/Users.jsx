@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Btn, Card, Modal, PageIntro, SearchBox, StatCard, Tag, errorText } from '../../components/AdminUI'
 import { Avatar, Field } from '../../components/ui'
 import { useToast } from '../../components/Layout'
-import { useAsync } from '../../lib/hooks'
+import { useAsync, useCopy } from '../../lib/hooks'
 import { Store } from '../../lib/store'
 
 const STAFF_ROLES = [
@@ -28,8 +28,16 @@ function UserForm({ user, me, cats, onClose, onSaved }) {
   })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [cred, setCred] = useState(null) // login details shown once after saving
+  const [, copy] = useCopy()
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
   const isClient = f.role === 'influencer'
+  const generate = () => {
+    const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+    const buf = new Uint32Array(12)
+    crypto.getRandomValues(buf)
+    setF((x) => ({ ...x, password: Array.from(buf, (n) => abc[n % abc.length]).join('') + '!7' }))
+  }
   const roles = STAFF_ROLES.filter(([r]) => r !== 'super_admin' || (me && me.role === 'super_admin'))
 
   const save = async () => {
@@ -52,9 +60,25 @@ function UserForm({ user, me, cats, onClose, onSaved }) {
         })
         await Store.saveUser(null, body)
       }
-      toast(editing ? 'Account updated' : 'Account created — share the login details securely')
-      onSaved()
+      toast(editing ? 'Account updated' : 'Account created')
+      if (f.password) {
+        const page = isClient ? '/#/login' : '/#/admin'
+        setCred(`ProFluencer Awards — ${isClient ? 'creator dashboard' : 'admin panel'}
+Login page: ${window.location.origin}${page}
+Email: ${f.email.trim()}
+Password: ${f.password}`)
+      } else onSaved()
     } catch (e) { setErr(errorText(e)) } finally { setBusy(false) }
+  }
+
+  if (cred) {
+    return (
+      <Modal title="Login details" onClose={onSaved}
+        footer={<><Btn icon="link" onClick={() => copy(cred, () => toast('Login details copied'))}>Copy</Btn><Btn variant="primary" onClick={onSaved}>Done</Btn></>}>
+        <p className="hint" style={{ marginBottom: 12 }}>Copy these now and send them privately. Passwords are stored encrypted (hashed), so this is the only time this password can be shown. You can set a new one at any time with Edit.</p>
+        <div className="cred-box">{cred}</div>
+      </Modal>
+    )
   }
 
   return (
@@ -81,7 +105,10 @@ function UserForm({ user, me, cats, onClose, onSaved }) {
         <Field label="Login email *"><input type="email" value={f.email} onChange={set('email')} autoComplete="off" /></Field>
         <div className="span2">
           <Field label={editing ? 'New password' : 'Password *'} hint={editing ? 'Leave empty to keep the current password. Changing it signs the user out everywhere.' : 'At least 8 characters.'}>
-            <input type="text" value={f.password} onChange={set('password')} autoComplete="new-password" />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="text" value={f.password} onChange={set('password')} autoComplete="new-password" />
+              <Btn onClick={generate}>Generate</Btn>
+            </div>
           </Field>
         </div>
       </div>

@@ -77,6 +77,78 @@ function NomineeForm({ nominee, cats, onClose, onSaved }) {
   )
 }
 
+const CHECKS = [
+  ['profile_link', 'Profile link opens and is public', 'Open the profile link. The account exists, is public and is active.'],
+  ['identity', 'Profile belongs to this person', 'Name, photo or bio match the applicant; contact details look genuine.'],
+  ['audience', 'Audience looks real', 'Follower count is plausible; engagement is not bought (no sudden spikes, bot comments).'],
+  ['category_fit', 'Right category', 'Content matches the chosen award category.'],
+  ['no_duplicate', 'Not a duplicate or impersonation', 'No other nomination for the same creator, no fan or parody account.'],
+]
+
+/* Genuine-or-fake review. Approval needs every check ticked; the result,
+   notes and reviewer are stored on the nominee and shown to them. */
+function ReviewModal({ nominee, catName, onClose, onSaved }) {
+  const toast = useToast()
+  const prev = nominee.verification || {}
+  const [checks, setChecks] = useState(() => Object.fromEntries(CHECKS.map(([k]) => [k, !!prev[k]])))
+  const [notes, setNotes] = useState(nominee.reviewNotes || '')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const allOk = CHECKS.every(([k]) => checks[k])
+
+  const decide = async (decision) => {
+    setErr('')
+    if (decision !== 'approved' && !notes.trim()) { setErr('Add a note so the nominee knows what to fix or why.'); return }
+    setBusy(true)
+    try {
+      await Store.reviewNominee(nominee.id, { decision, notes: notes.trim() || null, checks })
+      toast(decision === 'approved' ? `${nominee.name} approved — now live for voting` : decision === 'rejected' ? 'Nomination rejected' : 'Changes requested')
+      onSaved()
+    } catch (e) { setErr(errorText(e)) } finally { setBusy(false) }
+  }
+
+  return (
+    <Modal title={`Verify nomination — ${nominee.name}`} onClose={onClose} wide
+      footer={<>
+        <Btn variant="danger" onClick={() => decide('rejected')} disabled={busy}>Reject as fake / ineligible</Btn>
+        <Btn onClick={() => decide('changes_requested')} disabled={busy}>Request changes</Btn>
+        <Btn variant="primary" icon="check" onClick={() => decide('approved')} disabled={busy || !allOk}>Approve &amp; publish</Btn>
+      </>}>
+      <div className={`form-error${err ? ' show' : ''}`}>{err}</div>
+      <div className="agrid two">
+        <div>
+          <div className="cell-user" style={{ marginBottom: 14 }}>
+            <Avatar name={nominee.name} photo={assetUrl(nominee.photo)} size={56} />
+            <div><b style={{ fontSize: 16 }}>{nominee.name}</b><div className="muted">{catName}</div></div>
+          </div>
+          <dl className="kv">
+            <dt>Profile</dt><dd>{nominee.profile_url ? <a href={nominee.profile_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold-lt)', wordBreak: 'break-all' }}>{nominee.profile_url}</a> : <span className="tag red">no link</span>}</dd>
+            <dt>Handle</dt><dd>{[nominee.handle, nominee.platform].filter(Boolean).join(' · ') || '—'}</dd>
+            <dt>Followers</dt><dd>{nominee.followers || '—'}</dd>
+            <dt>Login email</dt><dd>{nominee.email || '—'}</dd>
+            <dt>Mobile</dt><dd>{nominee.mobile || '—'}</dd>
+            <dt>Location</dt><dd>{[nominee.city, nominee.country].filter(Boolean).join(', ') || '—'}</dd>
+            <dt>Registered</dt><dd>{nominee.created_at ? Store.fmtTime(nominee.created_at) : '—'}</dd>
+            <dt>Bio</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{nominee.bio || '—'}</dd>
+          </dl>
+        </div>
+        <div>
+          <p className="hint" style={{ marginBottom: 10 }}>Verification checklist — all five are required to approve.</p>
+          {CHECKS.map(([k, label, help]) => (
+            <label key={k} className="acheck" style={{ alignItems: 'flex-start', background: checks[k] ? 'rgba(52,211,153,.07)' : 'rgba(255,255,255,.03)', border: '1px solid var(--p-line)', borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
+              <input type="checkbox" checked={checks[k]} onChange={(e) => setChecks((c) => ({ ...c, [k]: e.target.checked }))} style={{ marginTop: 3 }} />
+              <span><b style={{ display: 'block', fontSize: 13.5 }}>{label}</b><span className="hint">{help}</span></span>
+            </label>
+          ))}
+          <Field label="Note to the nominee" hint="Required when rejecting or requesting changes. The nominee sees this in their dashboard.">
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows="3" />
+          </Field>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export default function Nominees({ refreshKey, onChanged }) {
   const toast = useToast()
   const [q, setQ] = useState('')
@@ -84,6 +156,7 @@ export default function Nominees({ refreshKey, onChanged }) {
   const [fcat, setFcat] = useState('')
   const [selected, setSelected] = useState(new Set())
   const [editing, setEditing] = useState(null) // null | 'new' | nominee
+  const [reviewing, setReviewing] = useState(null)
   const { data: cats = [] } = useAsync(() => Store.categories(), [refreshKey])
   const { data: all = [], reload, loading } = useAsync(() => Store.allNominees(), [refreshKey])
 
@@ -121,7 +194,7 @@ export default function Nominees({ refreshKey, onChanged }) {
   return (
     <>
       <PageIntro right={<Btn variant="primary" icon="plus" onClick={() => setEditing('new')}>Add nominee</Btn>}>
-        Every influencer profile on the site. Approve self-nominations, edit any profile, or add nominees directly. Only approved nominees appear publicly and can receive votes.
+        Every nomination lands here. Open Review to verify a nomination is genuine (profile, identity, audience, category, no duplicates) before approving it. Only approved nominees appear on the website and can receive votes.
       </PageIntro>
 
       <div className="atool">
@@ -142,7 +215,6 @@ export default function Nominees({ refreshKey, onChanged }) {
       {selected.size > 0 && (
         <div className="atool">
           <span className="hint">{selected.size} selected</span>
-          <Btn size="sm" variant="ok" icon="check" onClick={() => setStatus([...selected], 'approved')}>Approve</Btn>
           <Btn size="sm" onClick={() => setStatus([...selected], 'changes_requested')}>Request changes</Btn>
           <Btn size="sm" variant="danger" onClick={() => { if (window.confirm(`Reject ${selected.size} nominees?`)) setStatus([...selected], 'rejected') }}>Reject</Btn>
         </div>
@@ -168,10 +240,10 @@ export default function Nominees({ refreshKey, onChanged }) {
                   <td className="muted">{catName(x.categoryId)}</td>
                   <td className="muted">{x.email || '—'}{x.mobile ? <><br />{x.mobile}</> : null}{(x.city || x.country) ? <><br />{[x.city, x.country].filter(Boolean).join(', ')}</> : null}</td>
                   <td className="num">{Store.fmt(x.votes || 0)}</td>
-                  <td><Tag>{isPending(x.status) ? 'pending' : x.status}</Tag></td>
+                  <td><Tag>{isPending(x.status) ? 'pending' : x.status}</Tag>{x.status === 'approved' && x.verification && x.verification.identity ? <div className="muted" style={{ marginTop: 4 }}>verified{x.verification.reviewer ? ` by ${x.verification.reviewer}` : ''}</div> : null}</td>
                   <td>
                     <div className="actions">
-                      {x.status !== 'approved' && <Btn size="sm" variant="ok" onClick={() => setStatus([x.id], 'approved')}>Approve</Btn>}
+                      {x.status !== 'approved' && <Btn size="sm" variant="ok" icon="shield" onClick={() => setReviewing(x)}>Review</Btn>}
                       {x.status === 'approved' && <Btn size="sm" onClick={() => setStatus([x.id], 'changes_requested')}>Unpublish</Btn>}
                       <Btn size="sm" icon="pencil" onClick={() => setEditing(x)} aria-label={`Edit ${x.name}`} />
                       <Btn size="sm" variant="danger" icon="trash" onClick={() => remove(x)} aria-label={`Delete ${x.name}`} />
@@ -185,6 +257,10 @@ export default function Nominees({ refreshKey, onChanged }) {
         </div>
       </Card>
 
+      {reviewing && (
+        <ReviewModal nominee={reviewing} catName={catName(reviewing.categoryId)}
+          onClose={() => setReviewing(null)} onSaved={() => { setReviewing(null); refresh() }} />
+      )}
       {editing && (
         <NomineeForm nominee={editing === 'new' ? null : editing} cats={cats}
           onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refresh() }} />

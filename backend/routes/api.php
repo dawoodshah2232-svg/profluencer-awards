@@ -69,6 +69,10 @@ Route::prefix('v1')->group(function (): void {
 
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:login');
+    Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:login');
+    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:login');
+    Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:login');
+    Route::get('/leaderboard', [DiscoveryController::class, 'leaderboard']);
     Route::post('/admin/login', [AuthController::class, 'staffLogin'])->middleware('throttle:login');
 
     // -- Authenticated --------------------------------------------------
@@ -81,6 +85,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/me', [InfluencerController::class, 'me']);
             Route::get('/stats', [InfluencerController::class, 'stats']);
             Route::get('/leaderboard', [InfluencerController::class, 'leaderboard']);
+            Route::patch('/profile', [InfluencerController::class, 'updateProfile']);
         });
 
         // Admin CRM
@@ -95,6 +100,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/export/{kind}', [AnalyticsController::class, 'export']);
 
             Route::apiResource('nominees', NomineeController::class);
+            Route::post('/nominees/{nominee}/review', [NomineeController::class, 'review']);
 
             Route::get('/nominations', [NominationReviewController::class, 'index']);
             Route::get('/nominations/{nomination}', [NominationReviewController::class, 'show']);
@@ -113,6 +119,7 @@ Route::prefix('v1')->group(function (): void {
             Route::put('/settings', [SettingController::class, 'update']);
             Route::patch('/settings', [SettingController::class, 'update']);
 
+            Route::get('/results/standings', [ResultController::class, 'standings']);
             Route::post('/results/publish', [ResultController::class, 'publish']);
             Route::post('/results/unpublish', [ResultController::class, 'unpublish']);
             Route::delete('/results', [ResultController::class, 'unpublish']);

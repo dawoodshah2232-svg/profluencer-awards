@@ -20,6 +20,8 @@ class SettingController extends Controller
         'voting_end',
         'ceremony_date',
         'ceremony_time',
+        'google_enabled',
+        'google_client_id',
         'ceremony_city',
         'ceremony_session',
         'ceremony_venue',

@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Countdown from '../components/Countdown'
+import Icon from '../components/Icons'
 import { Avatar, Chip, Field, PageHero } from '../components/ui'
 import { useAsync, useCopy } from '../lib/hooks'
 import { Store, getMode } from '../lib/store'
+import { assetUrl } from '../lib/assets'
+import { longDate, useDates } from '../lib/dates'
 import { validateVoter, VOTE_ERRORS } from '../lib/voting'
 import { useToast } from '../components/Layout'
 
@@ -22,20 +25,54 @@ function rateLimited() {
   return false
 }
 
-function ShareRow({ name, link }) {
-  const toast = useToast()
-  const [, copy] = useCopy()
-  const msg = encodeURIComponent(`Vote for ${name} at the ProFluencer Awards 2026: ${link}`)
+function Steps({ step }) {
+  const s = (n, label) => (
+    <div className={`vt-step${step === n ? ' on' : ''}${step > n ? ' done' : ''}`}>
+      <i>{step > n ? <Icon name="check" size={14} strokeWidth={2.4} /> : n}</i>{label}
+    </div>
+  )
+  return <div className="vt-steps">{s(1, 'Your details')}<span className="vt-line" />{s(2, 'Verify email')}<span className="vt-line" />{s(3, 'Counted')}</div>
+}
+
+/* Six single-digit boxes; typing advances, Backspace goes back, paste fills all. */
+function OtpInput({ value, onChange }) {
+  const refs = useRef([])
+  const digits = Array.from({ length: 6 }, (_, i) => value[i] || '')
+  const setAt = (i, d) => {
+    const next = digits.slice()
+    next[i] = d
+    onChange(next.join('').slice(0, 6))
+  }
   return (
-    <div className="share-row" style={{ justifyContent: 'center', marginTop: 22 }}>
-      <a className="share-btn" target="_blank" rel="noopener noreferrer" href={`https://wa.me/?text=${msg}`}>Share on WhatsApp</a>
-      <a className="share-btn" target="_blank" rel="noopener noreferrer" href={`https://twitter.com/intent/tweet?text=${msg}`}>Share on X</a>
-      <button className="share-btn" type="button" onClick={() => copy(link, () => toast('Voting link copied'))}>Copy link</button>
+    <div className="vt-otp" onPaste={(e) => {
+      const p = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6)
+      if (p) { e.preventDefault(); onChange(p); refs.current[Math.min(5, p.length)]?.focus() }
+    }}>
+      {digits.map((d, i) => (
+        <input key={i} ref={(el) => { refs.current[i] = el }} value={d} inputMode="numeric" maxLength={1}
+          autoComplete={i === 0 ? 'one-time-code' : 'off'} aria-label={`Digit ${i + 1}`}
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, '').slice(-1)
+            setAt(i, v)
+            if (v && i < 5) refs.current[i + 1]?.focus()
+          }}
+          onKeyDown={(e) => { if (e.key === 'Backspace' && !digits[i] && i > 0) refs.current[i - 1]?.focus() }} />
+      ))}
     </div>
   )
 }
 
-function VoteForm({ nominee, onDone }) {
+function Trust() {
+  return (
+    <div className="vt-trust">
+      <div><Icon name="shield" size={20} />Email-verified vote</div>
+      <div><Icon name="badge" size={20} />One vote per category</div>
+      <div><Icon name="eye" size={20} />Fraud-checked before results</div>
+    </div>
+  )
+}
+
+function VotePanel({ nominee, catName, onDone }) {
   const toast = useToast()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -45,6 +82,7 @@ function VoteForm({ nominee, onDone }) {
   const [otpStep, setOtpStep] = useState(null) // { holdId }
   const [otp, setOtp] = useState('')
   const [otpErr, setOtpErr] = useState('')
+  const first = nominee.name.split(' ')[0]
 
   const submit = async (e) => {
     e.preventDefault()
@@ -52,19 +90,15 @@ function VoteForm({ nominee, onDone }) {
     const v = validateVoter({ name, email, phone })
     if (!v.ok) { setErrors(v.errors); return }
     setErrors({})
-    if (rateLimited()) {
-      setErrors({ form: 'Please wait a few minutes before voting again.' })
-      return
-    }
+    if (rateLimited()) { setErrors({ form: 'Please wait a few minutes before voting again.' }); return }
     setSubmitting(true)
     try {
       const r = await Store.registerAndVote(nominee.id, { name: v.name, email: v.email, phone: v.phone })
       if (r.ok && r.otp_required) {
-        // Production flow: vote is HELD, email OTP sent — it only counts after verification.
+        // Production flow: the vote is HELD until the emailed code is entered.
         setOtpStep({ holdId: r.hold_id })
         toast('Verification code sent to your email')
       } else if (r.ok) {
-        toast(`Vote counted for ${nominee.name}`)
         onDone('counted')
       } else if (r.code === 'ALREADY_VOTED') {
         onDone('already')
@@ -73,107 +107,89 @@ function VoteForm({ nominee, onDone }) {
       }
     } catch {
       setErrors({ form: 'Could not submit your vote. Try again.' })
-    } finally {
-      setSubmitting(false)
-    }
+    } finally { setSubmitting(false) }
   }
 
   const verify = async (e) => {
     e.preventDefault()
     setOtpErr('')
-    if (!otp.trim()) { setOtpErr('Enter the code from your email.'); return }
+    if (otp.length !== 6) { setOtpErr('Enter the 6-digit code from your email.'); return }
     setSubmitting(true)
     try {
-      const r = await Store.verifyVoteOtp(otpStep.holdId, otp.trim())
-      if (r && r.ok) {
-        toast(`Vote counted for ${nominee.name}`)
-        onDone('counted')
-      } else {
-        setOtpErr(errMsg((r && r.code) || 'OTP_INVALID'))
-      }
-    } catch {
-      setOtpErr('Could not verify the code. Try again.')
-    } finally {
-      setSubmitting(false)
-    }
+      const r = await Store.verifyVoteOtp(otpStep.holdId, otp)
+      if (r && r.ok) onDone('counted')
+      else setOtpErr(errMsg((r && r.code) || 'OTP_INVALID'))
+    } catch { setOtpErr('Could not verify the code. Try again.') } finally { setSubmitting(false) }
   }
 
   const resend = async () => {
-    try {
-      await Store.resendVoteOtp(otpStep.holdId)
-      toast('A new code was sent to your email')
-    } catch { toast('Could not resend the code') }
+    try { await Store.resendVoteOtp(otpStep.holdId); toast('A new code was sent to your email') } catch { toast('Please wait a moment before requesting a new code') }
   }
 
   if (otpStep) {
     return (
-      <div className="otp-box">
-        <b>Check your email</b>
-        <p className="hint" style={{ marginTop: 6 }}>
-          We sent a verification code to <b style={{ color: 'var(--text)' }}>{email}</b>. Your vote is held and will only count after you enter the code. Unverified votes never count.
-        </p>
+      <>
+        <Steps step={2} />
+        <h2>Check your email</h2>
+        <p className="lead">We sent a 6-digit code to <b style={{ color: 'var(--text)' }}>{email}</b>. Your vote for {first} is on hold and only counts once you enter it. The code expires in 10 minutes.</p>
         <form onSubmit={verify}>
-          <Field label="Verification code">
-            <input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" />
-          </Field>
-          {otpErr && <p className="hint" style={{ color: '#fca5a5', margin: '10px 0' }}>{otpErr}</p>}
-          <button className="btn btn-gold btn-block" type="submit" disabled={submitting}>
-            {submitting ? 'Verifying…' : 'Verify and count my vote'}
-          </button>
+          <OtpInput value={otp} onChange={setOtp} />
+          {otpErr && <p className="vt-err" style={{ textAlign: 'center', marginBottom: 10 }}>{otpErr}</p>}
+          <button className="btn btn-gold btn-block" type="submit" disabled={submitting}>{submitting ? 'Verifying…' : 'Verify & count my vote'}</button>
         </form>
-        <p className="hint center" style={{ marginTop: 12 }}>
-          Didn&rsquo;t get it? <button type="button" className="mini-btn" onClick={resend}>Resend code</button>
+        <p className="hint center" style={{ marginTop: 14 }}>
+          No email? Check spam, or <button type="button" className="mini-btn" onClick={resend}>Resend code</button>
         </p>
-      </div>
+        <Trust />
+      </>
     )
   }
 
   return (
-    <div className="otp-box">
-      <b>Vote for {nominee.name.split(' ')[0]}</b>
-      <p className="hint">Enter your details below — one person, one vote per category. Your email and phone are your voter ID: neither can be reused in this category.</p>
+    <>
+      <Steps step={1} />
+      <h2>Vote for {first}</h2>
+      <p className="lead">{catName ? `${catName} · ` : ''}One person, one vote per category. Your email and phone are your voter ID and are never shown publicly.</p>
       <form onSubmit={submit} noValidate>
-        <Field label="Full name *">
+        <Field label="Full name">
           <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Your name" />
-          {errors.name && <div className="hint" style={{ color: '#fca5a5' }}>{errors.name}</div>}
+          {errors.name && <div className="vt-err">{errors.name}</div>}
         </Field>
-        <div className="form-2col">
-          <Field label="Email *" noMargin>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@email.com" />
-            {errors.email && <div className="hint" style={{ color: '#fca5a5' }}>{errors.email}</div>}
-          </Field>
-          <Field label="Phone *" noMargin>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" autoComplete="tel" placeholder="+971 5X XXX XXXX" />
-            {errors.phone && <div className="hint" style={{ color: '#fca5a5' }}>{errors.phone}</div>}
-          </Field>
-        </div>
+        <Field label="Email">
+          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@email.com" />
+          {errors.email && <div className="vt-err">{errors.email}</div>}
+        </Field>
+        <Field label="Mobile number">
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" autoComplete="tel" placeholder="+971 5X XXX XXXX" />
+          {errors.phone && <div className="vt-err">{errors.phone}</div>}
+        </Field>
         {/* honeypot */}
         <input type="text" name="website" autoComplete="off" tabIndex="-1" aria-hidden="true"
-          style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
-          onChange={() => {}} />
-        {errors.form && <p className="hint" style={{ color: '#fca5a5', marginTop: 10 }}>{errors.form}</p>}
-        <button className="btn btn-gold btn-block big-vote" type="submit" disabled={submitting} style={{ marginTop: 14 }}>
-          {submitting ? 'Submitting…' : 'Submit my vote'}
+          style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} onChange={() => {}} />
+        {errors.form && <p className="vt-err" style={{ marginBottom: 10 }}>{errors.form}</p>}
+        <button className="btn btn-gold btn-block big-vote" type="submit" disabled={submitting}>
+          {submitting ? 'Sending code…' : `Vote for ${first}`}
         </button>
       </form>
-      {getMode() === 'demo' && (
-        <p className="hint" style={{ marginTop: 10 }}>Demo preview: votes are stored in this browser only and counted instantly. Production verifies every vote with an email code first.</p>
-      )}
-    </div>
+      {getMode() === 'demo' && <p className="hint" style={{ marginTop: 10 }}>Demo preview: votes are stored in this browser only and counted instantly.</p>}
+      <Trust />
+    </>
   )
 }
 
 export default function NomineeDetail() {
   const { id } = useParams()
+  const toast = useToast()
+  const dates = useDates()
+  const [, copy] = useCopy()
   const [done, setDone] = useState(null) // 'counted' | 'already'
-  const { data: nominee, loading } = useAsync(() => Store.getNominee(id), [id])
+  const { data: nominee, loading, reload } = useAsync(() => Store.getNominee(id), [id])
   const { data: cat } = useAsync(() => (nominee ? Store.category(nominee.categoryId) : null), [nominee && nominee.id])
   const { data: state } = useAsync(() => Store.votingState(), [])
   const { data: settings } = useAsync(() => Store.settings(), [])
-  const { data: choice, reload: reloadChoice } = useAsync(
-    () => (nominee ? Store.voterChoice(nominee.categoryId) : null),
-    [nominee && nominee.id]
-  )
+  const { data: board } = useAsync(() => (nominee && (state === 'open' || (settings && settings.resultsPublished))
+    ? Store.byCategory(nominee.categoryId, true) : null), [nominee && nominee.id, state, settings && settings.resultsPublished])
+  const { data: choice, reload: reloadChoice } = useAsync(() => (nominee ? Store.voterChoice(nominee.categoryId) : null), [nominee && nominee.id])
 
   if (loading) return <PageHero title="Loading…" />
   if (!nominee || nominee.status !== 'approved') {
@@ -184,60 +200,87 @@ export default function NomineeDetail() {
     )
   }
 
-  const link = typeof window !== 'undefined' ? window.location.href.split('#')[0] : ''
+  const link = typeof window !== 'undefined' ? window.location.href : ''
   const first = nominee.name.split(' ')[0]
+  const msg = encodeURIComponent(`Vote for ${nominee.name} at the ProFluencer Awards 2026: ${link}`)
+  const visible = !!board
+  const sorted = (board || []).slice().sort((a, b) => (b.votes || 0) - (a.votes || 0))
+  const rank = sorted.findIndex((x) => x.id === nominee.id) + 1
+  const total = sorted.reduce((a, x) => a + (x.votes || 0), 0)
+  const share = total > 0 ? ((nominee.votes || 0) / total) * 100 : 0
 
-  let action = null
+  let panel
   if (state === 'upcoming') {
-    action = (
+    panel = (
       <>
-        <div className="state-note"><b style={{ color: 'var(--text)' }}>Voting opens October 15, 2026.</b><br />Share this page and come back when the voting window opens.</div>
-        <Countdown showNote={false} className="" />
+        <h2>Voting opens {longDate(dates.votingStart)}</h2>
+        <p className="lead">Save this page and come back when the window opens. Share it with {first}&rsquo;s fans now.</p>
+        <Countdown kind="voting" />
+        <Trust />
       </>
     )
   } else if (state === 'closed') {
-    action = (
-      <div className="state-note"><b style={{ color: 'var(--text)' }}>Voting closed — results under review.</b><br />
-        {settings && settings.resultsPublished
-          ? <>Winners have been announced. <Link to="/winners" style={{ color: 'var(--gold-lt)', fontWeight: 700 }}>See the results</Link>.</>
-          : 'Winners will be crowned at the ceremony on December 11, 2026.'}
-      </div>
-    )
-  } else if (done === 'counted' || choice === nominee.id) {
-    action = (
+    panel = (
       <>
-        <div className="voted-note">Your vote for {nominee.name} is counted. Thank you.</div>
-        <p className="hint" style={{ marginTop: 10 }}>You can still vote for one nominee in each of the other 9 categories.</p>
+        <h2>Voting has closed</h2>
+        <p className="lead">{settings && settings.resultsPublished
+          ? <>The results are published. <Link to="/winners" style={{ color: 'var(--gold-lt)', fontWeight: 700 }}>See the winners</Link>.</>
+          : `Votes are being verified. Winners are crowned on ${longDate(dates.ceremonyDate)} in ${dates.ceremonyCity}.`}</p>
+        <Link className="btn btn-ghost btn-block" to="/leaderboard">View the leaderboard</Link>
       </>
     )
+  } else if (done === 'counted' || choice === nominee.id) {
+    panel = (
+      <div className="vt-done">
+        <Steps step={4} />
+        <div className="ring"><Icon name="check" size={40} strokeWidth={2.2} /></div>
+        <h2>Your vote is counted</h2>
+        <p className="lead">Thank you for voting for {nominee.name}. You can vote once in each of the other categories too.</p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link className="btn btn-gold" to="/nominees">Vote in another category</Link>
+          <Link className="btn btn-ghost" to="/leaderboard">Live leaderboard</Link>
+        </div>
+      </div>
+    )
   } else if (done === 'already' || choice) {
-    action = (
-      <div className="state-note"><b style={{ color: 'var(--text)' }}>You already voted in {cat ? cat.name : 'this category'}</b><br />One vote per category; votes cannot be changed.</div>
+    panel = (
+      <>
+        <h2>You already voted in {cat ? cat.name : 'this category'}</h2>
+        <p className="lead">Each person gets one vote per category, and votes cannot be changed. You can still vote in the other categories.</p>
+        <Link className="btn btn-gold btn-block" to="/nominees">Browse other categories</Link>
+      </>
     )
   } else {
-    action = <VoteForm nominee={nominee} onDone={(r) => { setDone(r); reloadChoice() }} />
+    panel = <VotePanel nominee={nominee} catName={cat && cat.name} onDone={(r) => { setDone(r); reloadChoice(); reload() }} />
   }
 
   return (
-    <>
-      <PageHero>
-        <div className="vote-hero">
-          <Avatar name={nominee.name} photo={nominee.photo} size={110} style={{ margin: '0 auto 18px', border: '3px solid var(--gold)' }} />
-          <Chip>{cat ? cat.name : ''}</Chip>
-          <h1 style={{ marginTop: 12, fontSize: 'clamp(28px,6vw,44px)' }}>{nominee.name}</h1>
-          <p className="sec-sub" style={{ margin: '10px auto 0' }}>
-            {nominee.handle} &middot; {nominee.platform}
-            {nominee.followers ? ` · ${nominee.followers} followers` : ''}
-            {nominee.bio ? ` — ${nominee.bio}` : ''}
-          </p>
-          <div style={{ marginTop: 8 }}>{action}</div>
-          <ShareRow name={first} link={link} />
+    <PageHero>
+      <div className="vt">
+        <div className="vt-card vt-profile">
+          <Chip>{cat ? cat.name : 'Nominee'}</Chip>
+          <Avatar name={nominee.name} photo={assetUrl(nominee.photo)} size={128} />
+          <h1>{nominee.name}</h1>
+          <div className="vt-handle">{[nominee.handle, nominee.platform, nominee.followers ? `${nominee.followers} followers` : ''].filter(Boolean).join(' · ')}</div>
+          <span className="vt-verified"><Icon name="shield" size={14} />Verified nominee</span>
+          {nominee.bio && <p className="vt-bio">{nominee.bio}</p>}
+          {visible && (
+            <div className="vt-stats">
+              <div><b>{Store.fmt(nominee.votes || 0)}</b><span>Votes</span></div>
+              <div><b>{rank > 0 ? `#${rank}` : '–'}</b><span>Rank</span></div>
+              <div><b>{share.toFixed(1)}%</b><span>Share</span></div>
+            </div>
+          )}
+          <div className="share-row" style={{ justifyContent: 'center', marginTop: 22 }}>
+            <a className="share-btn" target="_blank" rel="noopener noreferrer" href={`https://wa.me/?text=${msg}`}>WhatsApp</a>
+            <a className="share-btn" target="_blank" rel="noopener noreferrer" href={`https://twitter.com/intent/tweet?text=${msg}`}>X</a>
+            <a className="share-btn" target="_blank" rel="noopener noreferrer" href={`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${msg}`}>Telegram</a>
+            <button className="share-btn" type="button" onClick={() => copy(link, () => toast('Voting link copied'))}><Icon name="link" size={16} />Copy link</button>
+          </div>
+          {nominee.profile_url && <p style={{ marginTop: 14 }}><a className="hint" href={nominee.profile_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>View {first}&rsquo;s {nominee.platform || 'profile'}</a></p>}
         </div>
-        <div className="center mt">
-          <p className="sec-sub" style={{ margin: '0 auto 18px' }}>Know a creator who deserves a trophy? Nominations are free.</p>
-          <Link className="btn btn-ghost" to="/nominate">Nominate an influencer</Link>
-        </div>
-      </PageHero>
-    </>
+        <div className="vt-card vt-panel">{panel}</div>
+      </div>
+    </PageHero>
   )
 }

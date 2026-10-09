@@ -29,6 +29,7 @@ const NAV = [
   { to: '/', label: 'Home', end: true },
   { to: '/categories', label: 'Categories' },
   { to: '/nominees', label: 'Nominees' },
+  { to: '/leaderboard', label: 'Leaderboard' },
   { to: '/event', label: 'Event' },
   { to: '/sponsors', label: 'Sponsors' },
   { to: '/news', label: 'News' },
@@ -60,7 +61,7 @@ function Header() {
               </NavLink>
             ))}
           </nav>
-          <Link className="btn btn-gold btn-sm nav-cta" to="/login">Influencer Login</Link>
+          <Link className="btn btn-gold btn-sm nav-cta" to="/login">Get Started</Link>
           <button className="burger" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             <span /><span /><span />
           </button>
@@ -70,7 +71,7 @@ function Header() {
         {NAV.map((n) => (
           <Link key={n.to} to={n.to}>{n.label}</Link>
         ))}
-        <Link to="/login" style={{ color: 'var(--gold-lt)', fontWeight: 800 }}>Influencer Login</Link>
+        <Link to="/login" style={{ color: 'var(--gold-lt)', fontWeight: 800 }}>Get Started</Link>
         <Link to="/admin" style={{ color: 'var(--muted)' }}>Admin Portal</Link>
       </div>
     </>
@@ -98,12 +99,14 @@ function Footer() {
             <Link to="/categories">Categories</Link>
             <Link to="/nominees">Nominee Directory</Link>
             <Link to="/voting">How Voting Works</Link>
-            <Link to="/winners">Results</Link>
+            <Link to="/leaderboard">Live Leaderboard</Link>
+            <Link to="/winners">Winners</Link>
             <Link to="/nominate">Nominate Yourself</Link>
           </div>
           <div>
             <h4>Portals</h4>
-            <Link to="/login">Influencer Login</Link>
+            <Link to="/login">Creator Sign In</Link>
+            <Link to="/register">Create an Account</Link>
             <Link to="/dashboard">My Dashboard</Link>
             <Link to="/event">Ceremony &amp; RSVP</Link>
             <Link to="/sponsors">Sponsors</Link>

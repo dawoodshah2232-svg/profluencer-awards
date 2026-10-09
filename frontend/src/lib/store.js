@@ -134,6 +134,7 @@ const normNominee = (n) => {
     photo: n.photo_url || n.photo || '',
     legalName: n.legalName || n.name,
     approved: n.status === 'approved',
+    reviewNotes: n.review_notes || n.reviewNotes || '',
     category: n.category ? normCategory(n.category) : n.category,
   }
 }
@@ -154,6 +155,8 @@ const normSettings = (s) => {
     resultsPublished: !!s.results_published,
     ceremonyDate: s.ceremony_date || '',
     ceremonyTime: s.ceremony_time || '',
+    googleEnabled: !!s.google_enabled,
+    googleClientId: s.google_client_id || '',
     ceremonyCity: s.ceremony_city || '',
     ceremonySession: s.ceremony_session || '',
     ceremonyVenue: s.ceremony_venue || '',
@@ -211,6 +214,21 @@ const normVoterStats = (s) => {
 
 let settingsCache = null
 
+/* Registration form (page shape) -> API nominee profile fields. */
+const registrationBody = (d) => ({
+  name: d.legalName || null,
+  display_name: d.displayName,
+  mobile: d.mobile || null,
+  country: d.country || null,
+  city: d.city || null,
+  category_id: Number(d.categoryId),
+  platform: d.platform || null,
+  handle: d.handle || null,
+  profile_url: d.profileUrl || null,
+  followers: d.followers || null,
+  bio: d.bio || null,
+})
+
 export const Store = {
   mode: getMode,
 
@@ -231,7 +249,11 @@ export const Store = {
         settingsCache = null
         return normSettings(oneOf(r))
       })),
-  votingState: () => call(() => Demo.votingState(), () => api.get('/voting/state').then((r) => oneOf(r).state)),
+  /* 'upcoming' | 'open' | 'closed'. The API says live/ended; the pages use open/closed. */
+  votingState: () => call(() => Demo.votingState(), () => api.get('/voting/state').then((r) => {
+    const s = oneOf(r).state
+    return s === 'live' ? 'open' : s === 'ended' ? 'closed' : s
+  })),
   /* kind 'voting': next voting milestone (opens / closes).
      kind 'ceremony': the awards ceremony (Dubai time). */
   countdownTarget: (kind = 'voting') => call(() => {
@@ -276,20 +298,7 @@ export const Store = {
   }),
 
   nominate: (d) => call(() => Demo.nominate(d), async () => {
-    const r = oneOf(await api.post('/auth/register', {
-      name: d.legalName,
-      display_name: d.displayName,
-      email: d.email,
-      password: d.password,
-      mobile: d.mobile || null,
-      country: d.country || null,
-      city: d.city || null,
-      category_id: Number(d.categoryId),
-      platform: d.platform || null,
-      handle: d.handle || null,
-      profile_url: d.profileUrl || null,
-      bio: d.bio || null,
-    }))
+    const r = oneOf(await api.post('/auth/register', { ...registrationBody(d), email: d.email, password: d.password }))
     if (r && r.token) tokens.set(r.token)
     return nomineeOfUser(r && r.user)
   }),
@@ -386,9 +395,12 @@ export const Store = {
       () => api.get('/analytics/votes-by-category').then(oneOf)),
 
   /* ---------- results ---------- */
-  publishResults: () =>
+  /* selections: { [categoryId]: [nomineeId, ...] } — admin-confirmed winners in rank order. */
+  publishResults: (selections) =>
     call(() => Demo.publishResults(),
-      () => api.post('/admin/results/publish', {}, { token: tokens.getAdmin() }).then(oneOf)),
+      () => api.post('/admin/results/publish', selections ? { selections } : {}, adminTok()).then(oneOf)),
+  standings: () => call(demoOnly, () => api.get('/admin/results/standings', adminTok()).then(oneOf)),
+  leaderboard: () => call(demoOnly, () => api.get('/leaderboard').then(oneOf)),
   unpublishResults: () =>
     call(() => { Demo.unpublishResults(); return true },
       () => api.del('/admin/results', { token: tokens.getAdmin() }).then(() => true)),
@@ -457,7 +469,38 @@ export const Store = {
       throw e
     })),
 
+  /* ---------- account: Google sign-in + password reset ---------- */
+  /* mode 'login' → { ok, nominee } or { ok:false, code:'GOOGLE_NO_ACCOUNT', name, email }.
+     mode 'register' also needs the registration profile fields. */
+  googleAuth: (credential, mode = 'login', profile = {}) => call(demoOnly, async () => {
+    try {
+      const r = oneOf(await api.post('/auth/google', {
+        credential, mode,
+        ...(mode === 'register' ? registrationBody(profile) : {}),
+      }))
+      if (r && r.token) tokens.set(r.token)
+      return { ok: true, nominee: nomineeOfUser(r && r.user) }
+    } catch (e) {
+      if (e instanceof ApiError && e.payload) {
+        return { ok: false, code: e.payload.code || 'GOOGLE_FAILED', message: e.payload.message, ...(e.payload.data || {}) }
+      }
+      throw e
+    }
+  }),
+  forgotPassword: (email) => call(demoOnly, () => api.post('/auth/forgot-password', { email }).then((r) => r.message)),
+  resetPassword: (d) => call(demoOnly, () => api.post('/auth/reset-password', d).then((r) => r.message)),
+  updateMyProfile: (data) => call(demoOnly,
+    () => api.patch('/influencer/profile', data, { token: tokens.get() }).then((r) => normNominee(oneOf(r)))),
+
   /* ---------- admin: full CRUD over site data ---------- */
+  reviewNominee: (id, body) => call(demoOnly,
+    () => api.post(`/admin/nominees/${id}/review`, body, adminTok()).then((r) => normNominee(oneOf(r)))),
+  /* Raw stored settings (incl. disabled Google client id) for the admin form. */
+  adminSettings: () => call(() => ({}), () => api.get('/admin/settings', adminTok()).then(oneOf)),
+  saveRawSettings: (settings) => call(demoOnly, () => api.patch('/admin/settings', { settings }, adminTok()).then((r) => {
+    settingsCache = null
+    return oneOf(r)
+  })),
   adminMe: () => call(() => ({ name: 'Demo Admin', email: 'demo', role: 'super_admin' }),
     () => api.get('/auth/me', adminTok()).then(oneOf)),
 

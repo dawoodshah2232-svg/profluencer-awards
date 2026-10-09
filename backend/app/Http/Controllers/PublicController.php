@@ -28,6 +28,8 @@ class PublicController extends Controller
                 'voting_open' => Setting::votingIsOpen(),
                 'ceremony_date' => Setting::get('ceremony_date'),
                 'ceremony_time' => Setting::get('ceremony_time'),
+                'google_enabled' => Setting::get('google_enabled', '0') === '1' && trim((string) Setting::get('google_client_id', '')) !== '',
+                'google_client_id' => Setting::get('google_enabled', '0') === '1' ? Setting::get('google_client_id') : null,
                 'ceremony_city' => Setting::get('ceremony_city'),
                 'ceremony_session' => Setting::get('ceremony_session'),
                 'ceremony_venue' => Setting::get('ceremony_venue'),

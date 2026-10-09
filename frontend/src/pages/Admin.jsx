@@ -82,6 +82,9 @@ function AdminLogin({ onDone }) {
           <div className={`form-error${error ? ' show' : ''}`}>{error}</div>
           <Field label="Email"><input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" placeholder="you@company.com" /></Field>
           <Field label="Password"><input value={pass} onChange={(e) => setPass(e.target.value)} type="password" autoComplete="current-password" /></Field>
+          <p style={{ textAlign: 'right', margin: '-6px 0 14px', fontSize: 13.5 }}>
+            <Link to="/forgot-password?from=admin" style={{ color: 'var(--gold-lt)', fontWeight: 700 }}>Forgot password?</Link>
+          </p>
           <button className="abtn primary" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
           {isDemoMode() && <p className="hint" style={{ marginTop: 12, textAlign: 'center' }}>Demo access: admin / profluencer2026</p>}
           <Link className="back" to="/"><Icon name="globe" size={16} />Back to the website</Link>

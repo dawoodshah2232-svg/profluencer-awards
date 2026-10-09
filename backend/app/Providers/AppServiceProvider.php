@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -43,6 +45,23 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('login', function (Request $request): Limit {
             return Limit::perMinute(10)->by($request->ip());
+        });
+
+        // Password-reset emails link to the React app's reset page (hash routing).
+        ResetPassword::createUrlUsing(function ($user, string $token): string {
+            $frontend = rtrim(trim(explode(',', (string) config('pfa.frontend_url'))[0]), '/');
+
+            return $frontend.'/#/reset-password?token='.urlencode($token).'&email='.urlencode($user->getEmailForPasswordReset());
+        });
+        ResetPassword::toMailUsing(function ($user, string $token): MailMessage {
+            return (new MailMessage)
+                ->subject('Reset your ProFluencer Awards password')
+                ->greeting('Hello '.$user->name.',')
+                ->line('We received a request to reset the password for your ProFluencer Awards account.')
+                ->action('Choose a new password', ResetPassword::$createUrlCallback
+                    ? call_user_func(ResetPassword::$createUrlCallback, $user, $token)
+                    : url('/'))
+                ->line('This link expires in 60 minutes. If you did not ask for a reset, you can ignore this email.');
         });
     }
 }
