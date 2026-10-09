@@ -44,7 +44,7 @@ class AccountAndReviewTest extends TestCase
             'display_name' => 'Real Creator',
             'email' => $email,
             'password' => 'Secret123',
-            'category_id' => Category::query()->value('id'),
+            'category_id' => Category::query()->orderBy('sort_order')->value('id'),
             'profile_url' => 'https://instagram.com/realcreator',
             'followers' => '120K',
         ])->assertCreated()->json('data');
@@ -128,7 +128,7 @@ class AccountAndReviewTest extends TestCase
     public function test_leaderboard_hides_votes_until_voting_opens(): void
     {
         Setting::put('voting_start', now('Asia/Dubai')->addDays(5)->toDateString());
-        Nominee::create(['category_id' => Category::query()->value('id'), 'name' => 'Approved One', 'status' => 'approved', 'votes_count' => 7]);
+        Nominee::create(['category_id' => Category::query()->orderBy('sort_order')->value('id'), 'name' => 'Approved One', 'status' => 'approved', 'votes_count' => 7]);
 
         $this->getJson('/api/v1/leaderboard')->assertOk()
             ->assertJsonPath('data.visible', false)
@@ -137,7 +137,7 @@ class AccountAndReviewTest extends TestCase
 
     public function test_admin_confirmed_winner_order_is_published(): void
     {
-        $catId = Category::query()->value('id');
+        $catId = Category::query()->orderBy('sort_order')->value('id');
         $a = Nominee::create(['category_id' => $catId, 'name' => 'Most Votes', 'status' => 'approved', 'votes_count' => 10]);
         $b = Nominee::create(['category_id' => $catId, 'name' => 'Fewer Votes', 'status' => 'approved', 'votes_count' => 3]);
 
