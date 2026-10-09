@@ -45,6 +45,14 @@
   voting state live/ended → open/closed. Plaintext password storage was
   requested and declined — admin sees new passwords once (copy card).
   Apple sign-in not built.
+- 2026-10-09 — Voting window moved to Oct 20 – Nov 30, 2026 (migration
+  `2026_10_11_000001` updates the live setting + FAQ/news text).
+- 2026-10-09 — Email module (commit 55f1481): Settings → Email delivery
+  (Brevo API key / SMTP, encrypted secrets via `MailSettings`, applied at
+  boot), `email_templates` (8 system keys used by the app + 10 campaign),
+  `EmailRenderer` branded layout, campaigns with batch sending driven by
+  the admin page (`/admin/campaigns/{id}/process`, no cron), open pixel
+  `/api/v1/e/o/{token}.gif`, unsubscribe `/api/v1/e/u/{token}`.
 
 ## In progress
 
