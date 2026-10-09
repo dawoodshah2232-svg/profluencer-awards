@@ -1,7 +1,7 @@
 # ProFluencer Awards — profluencerawards.com
 
 10 industry categories · 50 awards (top 5 per category, rank 1 = Category Winner) ·
-public voting Oct 15 – Nov 30, 2026 · ceremony Dec 11, 2026, afternoon, Dubai.
+public voting Oct 20 – Nov 30, 2026 · ceremony Dec 11, 2026, afternoon, Dubai.
 
 ## Structure
 

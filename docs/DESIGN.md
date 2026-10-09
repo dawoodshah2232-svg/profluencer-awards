@@ -49,7 +49,7 @@ static build (`style-v3.css` → `frontend/src/styles.css`).
 
 ## Content rules
 
-- Public copy uses dates only for the voting window (Oct 15 – Nov 30,
+- Public copy uses dates only for the voting window (Oct 20 – Nov 30,
   2026); ceremony shown as "afternoon session" — no time-of-day claims.
 - Charts: lightweight div-based components, no chart library.
 - QR codes via `qrcode.react` only.

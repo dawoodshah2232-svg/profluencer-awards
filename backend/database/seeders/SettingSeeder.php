@@ -17,7 +17,7 @@ class SettingSeeder extends Seeder
     public static function defaults(): array
     {
         return [
-            'voting_start' => '2026-10-15',
+            'voting_start' => '2026-10-20',
             'voting_end' => '2026-11-30',
             'ceremony_date' => '2026-12-11',
             'ceremony_city' => 'Dubai',

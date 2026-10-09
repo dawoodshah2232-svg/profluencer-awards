@@ -5,7 +5,7 @@ import { useAsync } from './hooks'
 import { Store } from './store'
 
 export const DEFAULT_DATES = {
-  votingStart: '2026-10-15',
+  votingStart: '2026-10-20',
   votingEnd: '2026-11-30',
   ceremonyDate: '2026-12-11',
   ceremonyCity: 'Dubai',

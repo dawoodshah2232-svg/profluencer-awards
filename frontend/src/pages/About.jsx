@@ -38,7 +38,7 @@ export default function About() {
           <div className="cta-band">
             <span className="eyebrow">Join the edition</span>
             <h3>Your audience can put you on that stage.</h3>
-            <p>Nomination is free and takes minutes. Voting runs 15 October – 30 November 2026.</p>
+            <p>Nomination is free and takes minutes. Voting runs 20 October – 30 November 2026.</p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link className="btn btn-gold" to="/nominate">Nominate Yourself</Link>
               <Link className="btn btn-ghost" to="/voting">How voting works</Link>

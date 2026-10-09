@@ -32,7 +32,7 @@ export const CATEGORIES = [
 function defaultSettings() {
   return {
     edition: 'ProFluencer Awards 2026',
-    votingStart: '2026-10-15T00:00:00+04:00',
+    votingStart: '2026-10-20T00:00:00+04:00',
     votingEnd: '2026-11-30T23:59:59+04:00',
     ceremony: '2026-12-11T15:00:00+04:00',
     ceremonyVenue: 'Dubai, UAE — venue announced soon',

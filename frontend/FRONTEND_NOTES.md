@@ -127,7 +127,7 @@ Response shape: `{ data: … }` or a bare value — both are accepted.
 - Charts are lightweight div-based components (`src/components/Charts.jsx`) —
   no chart library. QR codes use `qrcode.react` (tiny, no deps).
 - Images live in `public/img/` (copied from the reference build).
-- Public copy uses dates only for the voting window (Oct 15 – Nov 30, 2026)
+- Public copy uses dates only for the voting window (Oct 20 – Nov 30, 2026)
   and "afternoon session" for the ceremony — no time-of-day claims.
 - Accessibility: skip link, aria labels on icon-only controls, `prefers-reduced-motion`
   respected for reveal animations.

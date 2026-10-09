@@ -6,7 +6,7 @@ per category; rank 1 = Category Winner).
 
 ## Confirmed dates
 
-- Public voting: **Oct 15 – Nov 30, 2026** (from `database/seeds.sql`).
+- Public voting: **Oct 20 – Nov 30, 2026** (from `database/seeds.sql`).
 - Ceremony: **Dec 11, 2026, afternoon, Dubai**.
 - Venue/time UNCONFIRMED — never present as confirmed. Public copy must not
   make time-of-day claims beyond "afternoon session".

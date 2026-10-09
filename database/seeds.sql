@@ -28,7 +28,7 @@ INSERT IGNORE INTO `categories` (`name`, `slug`, `description`, `sort_order`, `c
 -- only; the admin panel can later set exact datetimes if needed.
 -- ----------------------------------------------------------------------------
 INSERT IGNORE INTO `settings` (`key`, `value`, `created_at`, `updated_at`) VALUES
-('voting_start',       '2026-10-15', UTC_TIMESTAMP(), UTC_TIMESTAMP()),
+('voting_start',       '2026-10-20', UTC_TIMESTAMP(), UTC_TIMESTAMP()),
 ('voting_end',         '2026-11-30', UTC_TIMESTAMP(), UTC_TIMESTAMP()),
 ('ceremony_date',      '2026-12-11', UTC_TIMESTAMP(), UTC_TIMESTAMP()),
 ('ceremony_city',      'Dubai',      UTC_TIMESTAMP(), UTC_TIMESTAMP()),

@@ -80,9 +80,9 @@ package documents but does not enforce:
 - `seeds.sql` uses `UTC_TIMESTAMP()` for seed timestamps (server clock may be
   local time; UTC keeps Laravel's `now()` comparisons sane).
 - Settings store **dates only** for `voting_start` / `voting_end`
-  (`2026-10-15`, `2026-11-30`) because opening/closing *times* are unconfirmed.
+  (`2026-10-20`, `2026-11-30`) because opening/closing *times* are unconfirmed.
   If the backend stores full datetimes, the date-only values remain valid and
-  comparable (`2026-10-15` == start of that day).
+  comparable (`2026-10-20` == start of that day).
 - `results_published = '0'` and `awards_per_category = '5'` are strings, as
   the `settings.value` column is TEXT; the app casts them.
 
